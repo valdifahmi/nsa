@@ -12,7 +12,7 @@ $routes->post('auth/processLogin', 'AuthController::processLogin');
 $routes->get('auth/logout', 'AuthController::logout');
 
 // Protected Routes (With Auth Filter)
-$routes->get('/', 'Home::index', ['filter' => 'auth']);
+$routes->get('/', 'DashboardController::index', ['filter' => 'auth']);
 
 // Category Routes (With Auth Filter)
 $routes->group('category', ['filter' => 'auth'], function ($routes) {
@@ -80,4 +80,10 @@ $routes->group('report', ['filter' => 'auth'], function ($routes) {
 // Log Routes (Admin Only - With Auth and Admin Filter)
 $routes->group('logs', ['filter' => 'admin'], function ($routes) {
     $routes->get('/', 'LogController::index');
+});
+
+// Dashboard Routes (With Auth Filter)
+$routes->group('dashboard', ['filter' => 'auth'], function ($routes) {
+    $routes->get('/', 'DashboardController::index');
+    $routes->post('fetchData', 'DashboardController::fetchData');
 });

@@ -10,12 +10,12 @@
     <link rel="shortcut icon" href="<?= base_url()  ?>dist/assets/images/favicon.ico" />
     <link rel="stylesheet" href="<?= base_url()  ?>dist/assets/css/backend-plugin.min.css">
     <link rel="stylesheet" href="<?= base_url()  ?>dist/assets/css/backend.css?v=1.0.0">
-    <link rel="stylesheet" href="<?= base_url()  ?>dist/assets/vendor/@fortawesome/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="<?= base_url()  ?>dist/assets/vendor/line-awesome/dist/line-awesome/css/line-awesome.min.css">
-    <link rel="stylesheet" href="<?= base_url()  ?>dist/assets/vendor/remixicon/fonts/remixicon.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/line-awesome/1.3.0/line-awesome/css/line-awesome.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css">
 
     <!-- DataTables Bootstrap 4 CSS -->
-    <link rel="stylesheet" href="<?= base_url()  ?>dist/assets/vendor/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
     <!-- DataTables Buttons CSS from CDN -->
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap4.min.css">
 </head>
@@ -58,15 +58,15 @@
                             </a>
                             <ul id="dashboard" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
                                 <li class="">
-                                    <a href="<?= base_url()  ?>">
+                                    <a href="<?= base_url('dashboard') ?>">
                                         <i class="las la-minus"></i><span>Dashboard 1</span>
                                     </a>
                                 </li>
-                                <li class="">
-                                    <a href="<?= base_url()  ?>">
+                                <!-- <li class="">
+                                    <a href="<?= base_url('dashboard') ?>">
                                         <i class="las la-minus"></i><span>Dashboard 2</span>
                                     </a>
-                                </li>
+                                </li> -->
                             </ul>
                         </li>
                         <li class=" ">
@@ -155,22 +155,22 @@
                             <ul id="reports" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
                                 <li class="">
                                     <a href="<?= base_url('report/purchaseReport') ?>">
-                                        <i class="las la-minus"></i><span>Laporan Barang Masuk</span>
+                                        <i class="las la-minus"></i><span>Barang Masuk</span>
                                     </a>
                                 </li>
                                 <li class="">
                                     <a href="<?= base_url('report/purchaseItemReport') ?>">
-                                        <i class="las la-minus"></i><span>Laporan Barang Masuk (Detail)</span>
+                                        <i class="las la-minus"></i><span>Barang Masuk (Detail)</span>
                                     </a>
                                 </li>
                                 <li class="">
                                     <a href="<?= base_url('report/saleReport') ?>">
-                                        <i class="las la-minus"></i><span>Laporan Barang Keluar</span>
+                                        <i class="las la-minus"></i><span>Barang Keluar</span>
                                     </a>
                                 </li>
                                 <li class="">
                                     <a href="<?= base_url('report/saleItemReport') ?>">
-                                        <i class="las la-minus"></i><span>Laporan Barang Keluar (Detail)</span>
+                                        <i class="las la-minus"></i><span>Barang Keluar (Detail)</span>
                                     </a>
                                 </li>
                                 <li class="">
@@ -328,6 +328,13 @@
     </footer>
     <!-- Backend Bundle JavaScript -->
     <script src="<?= base_url()  ?>dist/assets/js/backend-bundle.min.js"></script>
+    <script>
+        if (window.jQuery) {
+            $.ajaxSetup({
+                cache: false
+            });
+        }
+    </script>
 
     <!-- Table Treeview JavaScript -->
     <script src="<?= base_url()  ?>dist/assets/js/table-treeview.js"></script>
@@ -335,15 +342,13 @@
     <!-- Chart Custom JavaScript -->
     <script src="<?= base_url()  ?>dist/assets/js/customizer.js"></script>
 
-    <!-- Chart Custom JavaScript -->
-    <script async src="<?= base_url()  ?>dist/assets/js/chart-custom.js"></script>
 
     <!-- app JavaScript -->
     <script src="<?= base_url()  ?>dist/assets/js/app.js"></script>
 
     <!-- DataTables Core -->
-    <script src="<?= base_url()  ?>dist/assets/vendor/js/jquery.dataTables.min.js"></script>
-    <script src="<?= base_url()  ?>dist/assets/vendor/js/dataTables.bootstrap4.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
 
     <!-- JSZip (for Excel export) - CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
