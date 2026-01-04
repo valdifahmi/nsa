@@ -80,31 +80,72 @@
                             </a>
                         </li>
                         <li class=" ">
-                            <a href="<?= base_url('category') ?>" class="">
-                                <svg class="svg-icon" id="p-dash3" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            <a href="<?= base_url('service') ?>" class="">
+                                <svg class="svg-icon" id="p-dash-service" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
                                 </svg>
-                                <span class="ml-4">Categories</span>
+                                <span class="ml-4">Jasa Service</span>
                             </a>
                         </li>
-                        <li class=" ">
-                            <a href="<?= base_url('brand') ?>" class="">
-                                <svg class="svg-icon" id="p-dash-brand" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                        <li class="">
+                            <a href="#datamaster" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                                <svg class="svg-icon" id="p-dash-master" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
                                 </svg>
-                                <span class="ml-4">Brands</span>
+                                <span class="ml-4">Data Master</span>
+                                <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="10 15 15 20 20 15"></polyline>
+                                    <path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                                </svg>
                             </a>
+                            <ul id="datamaster" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
+                                <li class="">
+                                    <a href="<?= base_url('category') ?>">
+                                        <i class="las la-minus"></i><span>Categories</span>
+                                    </a>
+                                </li>
+                                <li class="">
+                                    <a href="<?= base_url('brand') ?>">
+                                        <i class="las la-minus"></i><span>Brands</span>
+                                    </a>
+                                </li>
+                                <li class="">
+                                    <a href="<?= base_url('supplier') ?>">
+                                        <i class="las la-minus"></i><span>Suppliers</span>
+                                    </a>
+                                </li>
+                                <li class="">
+                                    <a href="<?= base_url('client') ?>">
+                                        <i class="las la-minus"></i><span>Clients</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
-                        <li class=" ">
-                            <a href="<?= base_url('sale') ?>" class="">
+                        <li class="">
+                            <a href="#stockout" class="collapsed" data-toggle="collapse" aria-expanded="false">
                                 <svg class="svg-icon" id="p-dash4" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
                                     <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
                                 </svg>
                                 <span class="ml-4">Stock Out</span>
+                                <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="10 15 15 20 20 15"></polyline>
+                                    <path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                                </svg>
                             </a>
+                            <ul id="stockout" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
+                                <li class="">
+                                    <a href="<?= base_url('sale') ?>">
+                                        <i class="las la-minus"></i><span>Transaksi Baru</span>
+                                    </a>
+                                </li>
+                                <li class="">
+                                    <a href="<?= base_url('sale/list') ?>">
+                                        <i class="las la-minus"></i><span>Daftar Transaksi</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         <li class=" ">
                             <a href="<?= base_url('purchase') ?>" class="">
@@ -116,27 +157,50 @@
                             </a>
                         </li>
                         <li class=" ">
-                            <a href="#people" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                                <svg class="svg-icon" id="p-dash8" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="9" cy="7" r="4"></circle>
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            <a href="<?= base_url('invoice') ?>" class="">
+                                <svg class="svg-icon" id="p-dash-invoice" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10 9 9 9 8 9"></polyline>
                                 </svg>
-                                <span class="ml-4">People</span>
-                                <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="10 15 15 20 20 15"></polyline>
-                                    <path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                                </svg>
+                                <span class="ml-4">Invoice</span>
                             </a>
-                            <ul id="people" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
-                                <li class="">
-                                    <a href="<?= base_url('people') ?>">
-                                        <i class="las la-minus"></i><span>Users</span>
-                                    </a>
-                                </li>
-                            </ul>
                         </li>
+                        <?php if (session()->get('user')['role'] === 'admin'): ?>
+                            <li class=" ">
+                                <a href="<?= base_url('pricing') ?>" class="">
+                                    <svg class="svg-icon" id="p-dash-pricing" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                    <span class="ml-4">Pricing</span>
+                                </a>
+                            </li>
+                            <li class=" ">
+                                <a href="#people" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                                    <svg class="svg-icon" id="p-dash8" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="9" cy="7" r="4"></circle>
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                    </svg>
+                                    <span class="ml-4">People</span>
+                                    <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="10 15 15 20 20 15"></polyline>
+                                        <path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                                    </svg>
+                                </a>
+                                <ul id="people" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
+                                    <li class="">
+                                        <a href="<?= base_url('people') ?>">
+                                            <i class="las la-minus"></i><span>Users</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        <?php endif; ?>
                         <li class="">
                             <a href="#reports" class="collapsed" data-toggle="collapse" aria-expanded="false">
                                 <svg class="svg-icon" id="p-dash7" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -244,7 +308,7 @@
                                 <li class="nav-item nav-icon dropdown caption-content">
                                     <a href="#" class="search-toggle dropdown-toggle" id="dropdownMenuButton4"
                                         data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                        <img src="<?= base_url()  ?>dist/assets/images/user/1.png" class="img-fluid rounded" alt="user">
+                                        <i class="ri-user-line" style="font-size: 24px;"></i>
                                     </a>
                                     <div class="iq-sub-dropdown dropdown-menu" aria-labelledby="dropdownMenuButton">
                                         <div class="card shadow-none m-0">
@@ -252,12 +316,13 @@
                                                 <div class="media-body profile-detail text-center">
                                                     <img src="<?= base_url()  ?>dist/assets/images/page-img/profile-bg.jpg" alt="profile-bg"
                                                         class="rounded-top img-fluid mb-4">
-                                                    <img src="<?= base_url()  ?>dist/assets/images/user/1.png" alt="profile-img"
-                                                        class="rounded profile-img img-fluid avatar-70">
+                                                    <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center" style="width: 70px; height: 70px; margin-top: -35px;">
+                                                        <i class="ri-user-line text-white" style="font-size: 32px;"></i>
+                                                    </div>
                                                 </div>
                                                 <div class="p-3">
-                                                    <h5 class="mb-1">JoanDuo@property.com</h5>
-                                                    <p class="mb-0">Since 10 march, 2020</p>
+                                                    <h5 class="mb-1"><?= session()->get('user')['nama_lengkap'] ?? 'User' ?></h5>
+                                                    <p class="mb-0"><?= session()->get('user')['username'] ?? '' ?></p>
                                                     <div class="d-flex align-items-center justify-content-center mt-3">
                                                         <a href="<?= base_url('auth/logout') ?>" class="btn border">Sign Out</a>
                                                     </div>

@@ -68,7 +68,7 @@
     <div class="col-lg-4">
         <div class="card card-transparent card-block card-stretch card-height border-none">
             <div class="card-body p-0 mt-lg-2 mt-0">
-                <h3 class="mb-3">Hi, Good Day</h3>
+                <h3 class="mb-3">Hi, Good Day <?= session()->get('user')['nama_lengkap'] ?? 'User' ?></h3>
                 <p class="mb-0 mr-4">Your dashboard gives you views of key performance or business process.</p>
             </div>
         </div>
@@ -83,7 +83,7 @@
                                 <i class="ri-arrow-down-circle-line" style="font-size: 40px; color: #3b82f6;"></i>
                             </div>
                             <div>
-                                <p class="mb-2">Total Barang Masuk</p>
+                                <p class="mb-2">Stock-IN</p>
                                 <h4 id="card-total-masuk">0</h4>
                             </div>
                         </div>
@@ -101,7 +101,7 @@
                                 <i class="ri-arrow-up-circle-line" style="font-size: 40px; color: #ef4444;"></i>
                             </div>
                             <div>
-                                <p class="mb-2">Total Barang Keluar</p>
+                                <p class="mb-2">Stock-Out</p>
                                 <h4 id="card-total-keluar">0</h4>
                             </div>
                         </div>
@@ -119,7 +119,7 @@
                                 <i class="ri-stack-line" style="font-size: 40px; color: #10b981;"></i>
                             </div>
                             <div>
-                                <p class="mb-2">Total Stok</p>
+                                <p class="mb-2">Total Stock</p>
                                 <h4 id="card-total-stok">0</h4>
                             </div>
                         </div>
@@ -202,6 +202,133 @@
             </div>
             <div class="card-body">
                 <div id="donut-chart-div" style="height:300px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============= FINANCIAL SECTION ============= -->
+    <div class="col-lg-12 mt-4">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Financial Overview</h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Cards -->
+    <div class="col-lg-3 col-md-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-4 card-total-sale">
+                    <div class="icon iq-icon-box-2 bg-warning-light">
+                        <i class="ri-archive-line" style="font-size: 40px; color: #f59e0b;"></i>
+                    </div>
+                    <div>
+                        <p class="mb-2">Inventory Value</p>
+                        <h4 id="card-inventory-value">Rp 0</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-4 card-total-sale">
+                    <div class="icon iq-icon-box-2 bg-info-light">
+                        <i class="ri-shopping-cart-line" style="font-size: 40px; color: #3b82f6;"></i>
+                    </div>
+                    <div>
+                        <p class="mb-2">Purchase Value</p>
+                        <h4 id="card-purchase-value">Rp 0</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-4 card-total-sale">
+                    <div class="icon iq-icon-box-2 bg-success-light">
+                        <i class="ri-money-dollar-circle-line" style="font-size: 40px; color: #10b981;"></i>
+                    </div>
+                    <div>
+                        <p class="mb-2">Revenue</p>
+                        <h4 id="card-revenue">Rp 0</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-4 card-total-sale">
+                    <div class="icon iq-icon-box-2 bg-primary-light">
+                        <i class="ri-line-chart-line" style="font-size: 40px; color: #6366f1;"></i>
+                    </div>
+                    <div>
+                        <p class="mb-2">Gross Profit</p>
+                        <h4 id="card-profit">Rp 0</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 1: Profit vs Revenue Trend -->
+    <div class="col-lg-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-header d-flex justify-content-between">
+                <div class="header-title">
+                    <h4 class="card-title">Profit vs Revenue Trend</h4>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="profit-revenue-chart-div"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 2: Revenue by Category -->
+    <div class="col-lg-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-header d-flex justify-content-between">
+                <div class="header-title">
+                    <h4 class="card-title">Revenue by Category</h4>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="revenue-category-chart-div" style="height:300px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 3: Sales Velocity -->
+    <div class="col-lg-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-header d-flex justify-content-between">
+                <div class="header-title">
+                    <h4 class="card-title">Sales Velocity (Days to Sell)</h4>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="sales-velocity-chart-div"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 4: Top Margin Products -->
+    <div class="col-lg-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-header d-flex justify-content-between">
+                <div class="header-title">
+                    <h4 class="card-title">Top 10 High Margin Products</h4>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="top-margin-chart-div"></div>
             </div>
         </div>
     </div>
@@ -349,10 +476,10 @@
             const color = (parseInt(item.stok_saat_ini) <= parseInt(item.min_stok)) ? 'bg-danger-light' : 'bg-warning-light';
             const html = `
                 <li class="col-lg-3 col-md-4 col-sm-6 mb-3">
-                    <div class="card card-block card-stretch card-height mb-0" style="min-height: 300px;">
-                        <div class="card-body" style="padding-bottom: 28px;">
-                            <div class="${color} d-flex align-items-center justify-content-center" style="height: 180px; border-radius: 15px; overflow: hidden;">
-                                <img src="${imagePath}" class="style-img img-fluid m-auto p-3" alt="image" style="max-height:210px;object-fit:contain;border-radius:10px;">
+                    <div class="card card-block card-stretch card-height mb-0" style="min-height: 250px;">
+                        <div class="card-body" style="padding-bottom: 20px;">
+                            <div class="${color} d-flex align-items-center justify-content-center" style="height: 100px; border-radius: 15px; overflow: hidden;">
+                                <img src="${imagePath}" class="style-img img-fluid m-auto p-3" alt="image" style="max-height:100px;object-fit:contain;border-radius:10px;">
                             </div>
                             <div class="style-text text-left mt-4">
                                 <h6 class="mb-1 text-truncate" title="${item.nama_barang}">${item.nama_barang}</h6>
@@ -366,10 +493,131 @@
         });
     }
 
+    function formatRupiah(x) {
+        const num = parseFloat(x || 0);
+        return 'Rp ' + new Intl.NumberFormat('id-ID', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(num);
+    }
+
     function updateCards(cards) {
         $('#card-total-masuk').text(numberFormat(cards.total_masuk));
         $('#card-total-keluar').text(numberFormat(cards.total_keluar));
         $('#card-total-stok').text(numberFormat(cards.total_stok));
+    }
+
+    function updateFinancialCards(financial) {
+        $('#card-inventory-value').text(formatRupiah(financial.inventory_value));
+        $('#card-purchase-value').text(formatRupiah(financial.total_purchase_value));
+        $('#card-revenue').text(formatRupiah(financial.total_revenue));
+        $('#card-profit').text(formatRupiah(financial.total_profit));
+    }
+
+    function updateProfitRevenueChart(data) {
+        const chartData = data.map(d => ({
+            tanggal: d.tanggal,
+            revenue: parseFloat(d.revenue || 0),
+            profit: parseFloat(d.profit || 0)
+        }));
+
+        if (!window.morrisProfitRevenue) {
+            window.morrisProfitRevenue = new Morris.Area({
+                element: 'profit-revenue-chart-div',
+                data: chartData,
+                xkey: 'tanggal',
+                ykeys: ['revenue', 'profit'],
+                labels: ['Revenue', 'Profit'],
+                behaveLikeLine: true,
+                parseTime: false,
+                lineColors: ['#10b981', '#6366f1'],
+                hideHover: 'auto',
+                resize: true,
+                yLabelFormat: function(y) {
+                    return formatRupiah(y);
+                }
+            });
+        } else {
+            window.morrisProfitRevenue.setData(chartData);
+        }
+    }
+
+    function updateRevenueCategoryChart(data) {
+        if (window.morrisRevenueCategory) {
+            $('#revenue-category-chart-div').empty();
+            window.morrisRevenueCategory = null;
+        }
+
+        if (!data || !data.length) {
+            $('#revenue-category-chart-div').html('<div class="text-center text-muted">No data</div>');
+            return;
+        }
+
+        window.morrisRevenueCategory = new Morris.Donut({
+            element: 'revenue-category-chart-div',
+            data: data.map(d => ({
+                label: d.category_name,
+                value: parseFloat(d.value || 0)
+            })),
+            colors: ['#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4'],
+            resize: true,
+            formatter: function(y) {
+                return formatRupiah(y);
+            }
+        });
+    }
+
+    function updateSalesVelocityChart(data) {
+        const chartData = data.map(d => ({
+            product: d.product_name,
+            days: parseFloat(d.avg_days_to_sell || 0)
+        }));
+
+        if (!window.morrisSalesVelocity) {
+            window.morrisSalesVelocity = new Morris.Bar({
+                element: 'sales-velocity-chart-div',
+                data: chartData,
+                xkey: 'product',
+                ykeys: ['days'],
+                labels: ['Days'],
+                barColors: ['#06b6d4'],
+                barRadius: [10, 10, 0, 0],
+                hideHover: 'auto',
+                resize: true,
+                gridTextSize: 11,
+                barSizeRatio: 0.6
+            });
+        } else {
+            window.morrisSalesVelocity.setData(chartData);
+        }
+    }
+
+    function updateTopMarginChart(data) {
+        const chartData = data.map(d => ({
+            product: d.product_name,
+            margin: parseFloat(d.margin_percentage || 0)
+        }));
+
+        if (!window.morrisTopMargin) {
+            window.morrisTopMargin = new Morris.Bar({
+                element: 'top-margin-chart-div',
+                data: chartData,
+                xkey: 'product',
+                ykeys: ['margin'],
+                labels: ['Margin %'],
+                barColors: ['#8b5cf6'],
+                barRadius: [10, 10, 0, 0],
+                hideHover: 'auto',
+                resize: true,
+                gridTextSize: 11,
+                barSizeRatio: 0.6,
+                yLabelFormat: function(y) {
+                    return y.toFixed(1) + '%';
+                }
+            });
+        } else {
+            window.morrisTopMargin.setData(chartData);
+        }
     }
 
     function updateDashboardData() {
@@ -412,6 +660,23 @@
                         category: []
                     };
                     renderDonutChart($('#donut-type-select').val() || 'product');
+
+                    // Financial Section
+                    if (res.financial_cards) {
+                        updateFinancialCards(res.financial_cards);
+                    }
+                    if (res.profit_revenue_trend) {
+                        updateProfitRevenueChart(res.profit_revenue_trend);
+                    }
+                    if (res.revenue_by_category) {
+                        updateRevenueCategoryChart(res.revenue_by_category);
+                    }
+                    if (res.sales_velocity) {
+                        updateSalesVelocityChart(res.sales_velocity);
+                    }
+                    if (res.top_margin_products) {
+                        updateTopMarginChart(res.top_margin_products);
+                    }
                 } catch (e) {
                     console.error(e);
                 }

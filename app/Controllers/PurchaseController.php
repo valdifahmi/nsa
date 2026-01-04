@@ -6,12 +6,16 @@ use App\Controllers\BaseController;
 use App\Models\StockInModel;
 use App\Models\StockInItemModel;
 use App\Models\ProductModel;
+use App\Models\SupplierModel;
+use App\Models\LogModel;
 
 class PurchaseController extends BaseController
 {
     protected $stockInModel;
     protected $stockInItemModel;
     protected $productModel;
+    protected $supplierModel;
+    protected $logModel;
     protected $db;
 
     public function __construct()
@@ -19,6 +23,8 @@ class PurchaseController extends BaseController
         $this->stockInModel = new StockInModel();
         $this->stockInItemModel = new StockInItemModel();
         $this->productModel = new ProductModel();
+        $this->supplierModel = new SupplierModel();
+        $this->logModel = new LogModel();
         $this->db = \Config\Database::connect();
         helper(['form', 'url']);
     }
@@ -33,19 +39,22 @@ class PurchaseController extends BaseController
 
     /**
      * Store new purchase transaction (AJAX)
+     * NEW LOGIC: Hidden pricing + auto-capture from product
      */
     public function store()
     {
+        // Get JSON input
+        $input = $this->request->getJSON();
+
+        // Validation rules
         $validation = \Config\Services::validation();
-
-        $rules = [
+        $validation->setRules([
+            'supplier_id' => 'required|integer',
             'tanggal_masuk' => 'required',
-            'supplier' => 'permit_empty|max_length[255]',
-            'catatan' => 'permit_empty|max_length[1000]',
             'items' => 'required'
-        ];
+        ]);
 
-        if (!$this->validate($rules)) {
+        if (!$validation->run((array)$input)) {
             return $this->response->setJSON([
                 'status' => 'error',
                 'message' => 'Validation failed',
@@ -53,23 +62,11 @@ class PurchaseController extends BaseController
             ]);
         }
 
-        // Get items from JSON
-        $itemsJson = $this->request->getPost('items');
-        $items = json_decode($itemsJson, true);
-
-        if (empty($items)) {
+        // Check if items array is empty
+        if (empty($input->items)) {
             return $this->response->setJSON([
                 'status' => 'error',
                 'message' => 'Cart is empty. Please add at least one item.'
-            ]);
-        }
-
-        // Validate tanggal_masuk format
-        $tanggal_masuk = $this->request->getPost('tanggal_masuk');
-        if (!$tanggal_masuk) {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Tanggal masuk is required'
             ]);
         }
 
@@ -83,82 +80,174 @@ class PurchaseController extends BaseController
         }
         $userId = $user['id'];
 
-        // Generate transaction number
-        $nomor_transaksi = $this->generateTransactionNumber();
+        // Verify supplier exists
+        $supplier = $this->supplierModel->find($input->supplier_id);
+        if (!$supplier) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => 'Supplier not found'
+            ]);
+        }
 
         // Start database transaction
-        $this->db->transBegin();
+        $this->db->transStart();
 
         try {
-            // Insert header to tb_stock_in
+            // Generate transaction number
+            $nomor_transaksi = $this->generateTransactionNumber();
+
+            // 1. Insert header to tb_stock_in
             $headerData = [
                 'nomor_transaksi' => $nomor_transaksi,
+                'supplier_id' => $input->supplier_id,
                 'user_id' => $userId,
-                'tanggal_masuk' => $tanggal_masuk . ' ' . date('H:i:s'),
-                'supplier' => $this->request->getPost('supplier') ?: null,
-                'catatan' => $this->request->getPost('catatan') ?: null
+                'tanggal_masuk' => $input->tanggal_masuk,
+                'catatan' => $input->catatan ?? null
             ];
 
-            $insertResult = $this->stockInModel->insert($headerData);
-
-            // Check if insert failed
-            if ($insertResult === false) {
-                $errors = $this->stockInModel->errors();
-                throw new \Exception('Failed to insert stock in header: ' . json_encode($errors));
-            }
-
+            $this->stockInModel->insert($headerData);
             $stock_in_id = $this->stockInModel->getInsertID();
 
-            if (!$stock_in_id || $stock_in_id == 0) {
-                throw new \Exception('Failed to get stock_in_id after insert. Insert result: ' . var_export($insertResult, true));
+            if (!$stock_in_id) {
+                throw new \Exception('Failed to create stock in header');
             }
 
-            // Insert items and update stock
-            foreach ($items as $item) {
+            // 2. Process each item
+            foreach ($input->items as $item) {
                 // Validate item data
-                if (!isset($item['product_id']) || !isset($item['jumlah'])) {
+                if (!isset($item->product_id) || !isset($item->jumlah)) {
                     throw new \Exception('Invalid item data');
                 }
 
-                // Insert to tb_stock_in_items
+                // Get product data (including current price)
+                $product = $this->productModel->find($item->product_id);
+                if (!$product) {
+                    throw new \Exception('Product not found: ' . $item->product_id);
+                }
+
+                // 3. Insert to tb_stock_in_items with HISTORICAL PRICE
                 $itemData = [
                     'stock_in_id' => $stock_in_id,
-                    'product_id' => $item['product_id'],
-                    'jumlah' => $item['jumlah']
+                    'product_id' => $item->product_id,
+                    'jumlah' => $item->jumlah,
+                    'harga_beli_satuan' => $product['harga_beli_saat_ini'] ?? 0 // AUTO from product
                 ];
 
                 $this->stockInItemModel->insert($itemData);
 
-                // Update stock in tb_products
-                $product = $this->productModel->find($item['product_id']);
-                if ($product) {
-                    $newStock = $product['stok_saat_ini'] + $item['jumlah'];
-                    $this->productModel->update($item['product_id'], [
-                        'stok_saat_ini' => $newStock
-                    ]);
-                }
+                // 4. Update stock in tb_products
+                $newStock = $product['stok_saat_ini'] + $item->jumlah;
+                $this->productModel->update($item->product_id, [
+                    'stok_saat_ini' => $newStock
+                ]);
+
+                // 5. Log activity
+                $this->logModel->insert([
+                    'user_id' => $userId,
+                    'action' => 'CREATE',
+                    'module' => 'Stock In',
+                    'log_message' => "Barang masuk: {$product['nama_barang']} ({$item->jumlah} {$product['satuan']}) - {$nomor_transaksi}"
+                ]);
             }
 
             // Commit transaction
-            $this->db->transCommit();
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === false) {
+                throw new \Exception('Transaction failed');
+            }
+
+            // Log main transaction
+            $this->logModel->insert([
+                'user_id' => $userId,
+                'action' => 'CREATE',
+                'module' => 'Stock In',
+                'log_message' => "Transaksi barang masuk berhasil: {$nomor_transaksi} - Supplier: {$supplier['nama_supplier']}"
+            ]);
 
             return $this->response->setJSON([
                 'status' => 'success',
-                'message' => 'Purchase transaction saved successfully',
+                'message' => 'Transaksi barang masuk berhasil disimpan',
                 'nomor_transaksi' => $nomor_transaksi
             ]);
         } catch (\Exception $e) {
             // Rollback transaction
             $this->db->transRollback();
 
-            // Log error for debugging
+            // Log error
             log_message('error', 'Purchase store error: ' . $e->getMessage());
+            $this->logModel->insert([
+                'user_id' => $userId,
+                'action' => 'ERROR',
+                'module' => 'Stock In',
+                'log_message' => 'Gagal menyimpan transaksi: ' . $e->getMessage()
+            ]);
 
             return $this->response->setJSON([
                 'status' => 'error',
                 'message' => 'Error: ' . $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Find product by barcode/code (AJAX)
+     */
+    public function findProductByCode()
+    {
+        $code = $this->request->getGet('code');
+
+        if (!$code) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => 'Code is required'
+            ]);
+        }
+
+        $product = $this->productModel->findByCode($code);
+
+        if (!$product) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => 'Product not found'
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data' => $product
+        ]);
+    }
+
+    /**
+     * Search products for autocomplete (AJAX)
+     * Returns products with image field
+     */
+    public function searchProducts()
+    {
+        $keyword = $this->request->getGet('q');
+
+        if (!$keyword) {
+            return $this->response->setJSON([
+                'status' => 'success',
+                'data' => []
+            ]);
+        }
+
+        // Get products with image field
+        $products = $this->productModel
+            ->select('id, kode_barang, nama_barang, satuan, stok_saat_ini, min_stok, image')
+            ->groupStart()
+            ->like('kode_barang', $keyword)
+            ->orLike('nama_barang', $keyword)
+            ->groupEnd()
+            ->limit(10)
+            ->findAll();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data' => $products
+        ]);
     }
 
     /**

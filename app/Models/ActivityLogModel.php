@@ -4,20 +4,20 @@ namespace App\Models;
 
 use CodeIgniter\Model;
 
-class StockOutItemModel extends Model
+class ActivityLogModel extends Model
 {
-    protected $table = 'tb_stock_out_items';
+    protected $table = 'tb_logs';
     protected $primaryKey = 'id';
     protected $useAutoIncrement = true;
     protected $returnType = 'array';
     protected $allowedFields = [
-        'stock_out_id',
-        'product_id',
-        'jumlah',
-        'harga_beli_satuan',
-        'harga_jual_satuan'
+        'user_id',
+        'action',
+        'module',
+        'log_message'
     ];
 
-    // No timestamps for items table
+    // Timestamps
     protected $useTimestamps = false;
+    protected $createdField = 'created_at';
 }

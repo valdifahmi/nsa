@@ -10,72 +10,115 @@
                 </div>
             </div>
             <div class="card-body">
+                <!-- Alert Container -->
+                <div id="alertContainer"></div>
+
                 <!-- Header Form -->
                 <div class="row mb-4">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="tipe_transaksi">Tipe Transaksi <span class="text-danger">*</span></label>
+                            <select class="form-control" id="tipe_transaksi" required>
+                                <option value="Beli Putus">Beli Putus (Selesai Langsung)</option>
+                                <option value="Workshop">Workshop (Bisa Ditambah Nanti)</option>
+                            </select>
+                            <small class="text-muted">
+                                <strong>Beli Putus:</strong> Transaksi selesai seketika<br>
+                                <strong>Workshop:</strong> Bisa menambah barang & jasa bertahap
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="client_id">Client <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <select class="form-control" id="client_id" required>
+                                    <option value="">Pilih Client</option>
+                                </select>
+                                <div class="input-group-append">
+                                    <button type="button" class="btn btn-success" onclick="quickAddClient()" title="Tambah Client Baru">
+                                        <i class="ri-add-line"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
                         <div class="form-group">
                             <label for="tanggal_keluar">Tanggal Keluar <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="tanggal_keluar" value="<?= date('Y-m-d') ?>" required>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <div class="form-group">
                             <label for="penerima">Penerima</label>
-                            <input type="text" class="form-control" id="penerima" placeholder="Nama Penerima">
+                            <input type="text" class="form-control" id="penerima" placeholder="Nama penerima (opsional)">
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <div class="form-group">
                             <label for="catatan">Catatan</label>
-                            <input type="text" class="form-control" id="catatan" placeholder="Catatan transaksi">
+                            <input type="text" class="form-control" id="catatan" placeholder="Catatan (opsional)">
                         </div>
                     </div>
                 </div>
 
-                <!-- Barcode Scanner Input with Autocomplete -->
+                <!-- Barcode Scanner Input with Autocomplete & Quick Add Product -->
                 <div class="row mb-4">
                     <div class="col-md-12">
                         <div class="form-group">
                             <label for="barcode_scanner">Scan Barcode / Kode Barang</label>
-                            <div style="position: relative;">
-                                <input type="text" class="form-control form-control-lg" id="barcode_scanner" placeholder="Scan barcode atau ketik kode barang lalu tekan Enter" autocomplete="off" autofocus>
-                                <div id="autocomplete_results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; max-height: 300px; overflow-y: auto; z-index: 1000; display: none;"></div>
+                            <div class="input-group">
+                                <div style="position: relative; flex: 1;">
+                                    <input type="text" class="form-control form-control-lg" id="barcode_scanner"
+                                        placeholder="Scan barcode atau ketik kode barang"
+                                        autocomplete="off" autofocus>
+                                    <div id="autocomplete_results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; max-height: 400px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                                </div>
+                                <div class="input-group-append">
+                                    <button type="button" class="btn btn-success btn-lg" onclick="quickAddProduct()" title="Tambah Produk Baru">
+                                        <i class="ri-add-line"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <small class="text-muted">Scan barcode atau ketik kode barang, lalu tekan Enter</small>
+                            <small class="text-muted">Ketik minimal 2 karakter untuk melihat saran produk, atau tekan Enter untuk mencari</small>
                         </div>
                     </div>
                 </div>
 
-                <!-- Cart Table -->
+                <!-- Cart Table (NO PRICE COLUMNS) -->
                 <div class="table-responsive">
                     <table id="cartTable" class="table table-striped table-bordered">
-                        <thead>
+                        <thead class="bg-primary text-white">
                             <tr>
                                 <th width="5%">No</th>
                                 <th width="15%">Kode Barang</th>
-                                <th width="30%">Nama Barang</th>
+                                <th width="35%">Nama Barang</th>
                                 <th width="10%">Satuan</th>
-                                <th width="10%">Stok Tersedia</th>
                                 <th width="15%">Jumlah</th>
+                                <th width="10%">Stok Tersedia</th>
                                 <th width="10%" class="text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="cartBody">
                             <tr>
-                                <td colspan="7" class="text-center text-muted">Keranjang kosong. Scan barcode untuk menambah barang.</td>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="ri-shopping-cart-line" style="font-size: 48px; opacity: 0.3;"></i>
+                                    <p class="mt-2">Keranjang kosong. Scan barcode untuk menambah barang.</p>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
 
-                <!-- Checkout Button -->
+                <!-- Action Buttons (NO TOTAL DISPLAY) -->
                 <div class="row mt-4">
                     <div class="col-md-12 text-right">
-                        <button type="button" class="btn btn-secondary" id="btnClearCart">
+                        <button type="button" class="btn btn-secondary btn-lg" id="btnClearCart">
                             <i class="ri-delete-bin-line"></i> Kosongkan Keranjang
                         </button>
                         <button type="button" class="btn btn-primary btn-lg" id="btnCheckout">
-                            <i class="ri-save-line"></i> Checkout (Simpan Transaksi)
+                            <i class="ri-save-line"></i> Simpan Transaksi
                         </button>
                     </div>
                 </div>
@@ -92,6 +135,39 @@
         let cart = [];
         let autocompleteTimeout;
 
+        // Load clients on page load
+        loadClients();
+
+        // Load clients dropdown
+        function loadClients() {
+            $.ajax({
+                url: '<?= base_url('client/getForDropdown') ?>',
+                type: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        var options = '<option value="">Pilih Client</option>';
+                        $.each(response.data, function(index, client) {
+                            options += '<option value="' + client.id + '">' + client.nama_klien + '</option>';
+                        });
+                        $('#client_id').html(options);
+                    }
+                }
+            });
+        }
+
+        // Quick add client function
+        window.quickAddClient = function() {
+            window.open('<?= base_url('client') ?>', '_blank');
+            showAlert('info', 'Silakan tambah client di tab baru, lalu refresh halaman ini');
+        };
+
+        // Quick add product function
+        window.quickAddProduct = function() {
+            window.open('<?= base_url('product') ?>', '_blank');
+            showAlert('info', 'Silakan tambah produk di tab baru, lalu refresh halaman ini untuk melihat produk baru');
+        };
+
         // Barcode scanner event listener
         $('#barcode_scanner').on('keypress', function(e) {
             if (e.which === 13) { // Enter key
@@ -99,9 +175,9 @@
                 var code = $(this).val().trim();
 
                 if (code) {
-                    searchProduct(code);
-                    $(this).val(''); // Clear input
                     $('#autocomplete_results').hide();
+                    searchProduct(code);
+                    $(this).val('');
                 }
             }
         });
@@ -149,17 +225,30 @@
                                 'Stok: ' + product.stok_saat_ini + ' ' + product.satuan :
                                 'STOK HABIS';
 
-                            html += '<div class="autocomplete-item" data-code="' + product.kode_barang + '" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center;">' +
-                                '<img src="' + imagePath + '" alt="' + product.nama_barang + '" style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px; border-radius: 4px;">' +
-                                '<div>' +
-                                '<strong>' + product.kode_barang + '</strong> - ' + product.nama_barang +
-                                '<br><small class="' + stockClass + '">' + stockText + '</small>' +
+                            html += '<div class="autocomplete-item" data-code="' + product.kode_barang + '" ' +
+                                'style="padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 12px; transition: background-color 0.2s;">' +
+                                '<img src="' + imagePath + '" alt="' + product.nama_barang + '" ' +
+                                'style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">' +
+                                '<div style="flex: 1;">' +
+                                '<div style="font-weight: 600; color: #333; margin-bottom: 4px;">' +
+                                '<span style="background: #007bff; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px; margin-right: 8px;">' +
+                                product.kode_barang + '</span>' +
+                                product.nama_barang +
+                                '</div>' +
+                                '<div style="font-size: 13px; color: #666;">' +
+                                '<span class="' + stockClass + '" style="font-weight: 600;">' + stockText + '</span>' +
+                                '</div>' +
                                 '</div>' +
                                 '</div>';
                         });
                         $('#autocomplete_results').html(html).show();
                     } else {
-                        $('#autocomplete_results').hide();
+                        $('#autocomplete_results').html(
+                            '<div style="padding: 15px; text-align: center; color: #999;">' +
+                            '<i class="ri-search-line" style="font-size: 24px; opacity: 0.5;"></i>' +
+                            '<p style="margin: 8px 0 0 0;">Produk tidak ditemukan</p>' +
+                            '</div>'
+                        ).show();
                     }
                 }
             });
@@ -168,13 +257,12 @@
         // Click on autocomplete item
         $(document).on('click', '.autocomplete-item', function() {
             var code = $(this).data('code');
-            $('#barcode_scanner').val(code);
+            $('#barcode_scanner').val('');
             $('#autocomplete_results').hide();
             searchProduct(code);
-            $('#barcode_scanner').val('').focus();
         });
 
-        // Hover effect for autocomplete items
+        // Hover effect
         $(document).on('mouseenter', '.autocomplete-item', function() {
             $(this).css('background-color', '#f8f9fa');
         }).on('mouseleave', '.autocomplete-item', function() {
@@ -229,7 +317,7 @@
                             addToCart(product, jumlah);
                         }
                     } else {
-                        showAlert('error', response.message);
+                        showAlert('error', response.message || 'Produk tidak ditemukan');
                     }
                 },
                 error: function() {
@@ -260,7 +348,12 @@
             tbody.empty();
 
             if (cart.length === 0) {
-                tbody.append('<tr><td colspan="7" class="text-center text-muted">Keranjang kosong. Scan barcode untuk menambah barang.</td></tr>');
+                tbody.append(
+                    '<tr><td colspan="7" class="text-center text-muted py-4">' +
+                    '<i class="ri-shopping-cart-line" style="font-size: 48px; opacity: 0.3;"></i>' +
+                    '<p class="mt-2">Keranjang kosong. Scan barcode untuk menambah barang.</p>' +
+                    '</td></tr>'
+                );
                 return;
             }
 
@@ -272,19 +365,12 @@
                     '<td>' + item.kode_barang + '</td>' +
                     '<td>' + item.nama_barang + '</td>' +
                     '<td>' + item.satuan + '</td>' +
+                    '<td><input type="number" class="form-control form-control-sm item-jumlah" data-index="' + index + '" value="' + item.jumlah + '" min="1" max="' + item.stok_saat_ini + '" style="width: 100px;"></td>' +
                     '<td class="' + stockClass + '">' + item.stok_saat_ini + '</td>' +
-                    '<td>' +
-                    '<input type="number" class="form-control form-control-sm item-jumlah" data-index="' + index + '" value="' + item.jumlah + '" min="1" max="' + item.stok_saat_ini + '" style="width: 100px;">' +
-                    '</td>' +
-                    '<td class="text-center">' +
-                    '<button class="btn btn-sm btn-danger btn-remove" data-index="' + index + '" title="Hapus" data-toggle="tooltip"><i class="ri-delete-bin-line"></i></button>' +
-                    '</td>' +
+                    '<td class="text-center"><button class="btn btn-sm btn-danger btn-remove" data-index="' + index + '" title="Hapus"><i class="ri-delete-bin-line"></i></button></td>' +
                     '</tr>';
                 tbody.append(row);
             });
-
-            // Initialize tooltips
-            $('[data-toggle="tooltip"]').tooltip();
         }
 
         // Update quantity in cart with stock validation
@@ -335,9 +421,17 @@
                 return;
             }
 
+            var client_id = $('#client_id').val();
+            if (!client_id) {
+                showAlert('warning', 'Client harus dipilih');
+                $('#client_id').focus();
+                return;
+            }
+
             var tanggal_keluar = $('#tanggal_keluar').val();
             if (!tanggal_keluar) {
                 showAlert('warning', 'Tanggal keluar harus diisi');
+                $('#tanggal_keluar').focus();
                 return;
             }
 
@@ -345,25 +439,29 @@
                 return;
             }
 
+            $('#btnCheckout').prop('disabled', true).html('<i class="ri-loader-4-line"></i> Menyimpan...');
+
             var data = {
+                tipe_transaksi: $('#tipe_transaksi').val(),
+                client_id: parseInt(client_id),
                 tanggal_keluar: tanggal_keluar,
-                penerima: $('#penerima').val(),
-                catatan: $('#catatan').val(),
-                items: JSON.stringify(cart)
+                penerima: $('#penerima').val() || null,
+                catatan: $('#catatan').val() || null,
+                items: cart
             };
 
             $.ajax({
                 url: '<?= base_url('sale/store') ?>',
                 type: 'POST',
-                data: data,
+                data: JSON.stringify(data),
+                contentType: 'application/json',
                 dataType: 'json',
                 success: function(response) {
                     if (response.status === 'success') {
-                        showAlert('success', response.message + ' (No: ' + response.nomor_transaksi + ')');
-
-                        // Reset form
+                        showAlert('success', response.message + ' (No: ' + response.nomor_transaksi + ', Invoice: ' + response.nomor_invoice + ')');
                         cart = [];
                         renderCart();
+                        $('#client_id').val('');
                         $('#penerima').val('');
                         $('#catatan').val('');
                         $('#tanggal_keluar').val('<?= date('Y-m-d') ?>');
@@ -372,30 +470,42 @@
                         showAlert('error', response.message);
                     }
                 },
-                error: function() {
-                    showAlert('error', 'Terjadi kesalahan saat menyimpan transaksi');
+                error: function(xhr) {
+                    var errorMsg = 'Terjadi kesalahan saat menyimpan transaksi';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showAlert('error', errorMsg);
+                },
+                complete: function() {
+                    $('#btnCheckout').prop('disabled', false).html('<i class="ri-save-line"></i> Simpan Transaksi');
                 }
             });
         });
 
+        // Show alert
         function showAlert(type, message) {
             var alertClass = type === 'success' ? 'alert-success' :
                 type === 'warning' ? 'alert-warning' :
                 type === 'info' ? 'alert-info' : 'alert-danger';
+            var icon = type === 'success' ? 'ri-checkbox-circle-line' :
+                type === 'warning' ? 'ri-error-warning-line' :
+                type === 'info' ? 'ri-information-line' : 'ri-close-circle-line';
+
             var alertHtml = '<div class="alert ' + alertClass + ' alert-dismissible fade show" role="alert">' +
-                message +
+                '<i class="' + icon + '"></i> ' + message +
                 '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
                 '<span aria-hidden="true">&times;</span>' +
                 '</button>' +
                 '</div>';
 
-            $('.card-body').prepend(alertHtml);
+            $('#alertContainer').html(alertHtml);
 
             setTimeout(function() {
                 $('.alert').fadeOut('slow', function() {
                     $(this).remove();
                 });
-            }, 3000);
+            }, 5000);
         }
     });
 </script>

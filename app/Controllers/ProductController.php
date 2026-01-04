@@ -316,4 +316,32 @@ class ProductController extends BaseController
             'data' => $products
         ]);
     }
+
+    /**
+     * Search products for jQuery UI Autocomplete (AJAX)
+     */
+    public function searchProducts()
+    {
+        $term = $this->request->getGet('term');
+
+        if (!$term || strlen($term) < 2) {
+            return $this->response->setJSON([
+                'status' => 'success',
+                'data' => []
+            ]);
+        }
+
+        $products = $this->productModel
+            ->groupStart()
+            ->like('kode_barang', $term)
+            ->orLike('nama_barang', $term)
+            ->groupEnd()
+            ->limit(10)
+            ->findAll();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data' => $products
+        ]);
+    }
 }

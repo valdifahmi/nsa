@@ -33,6 +33,28 @@ $routes->group('brand', ['filter' => 'auth'], function ($routes) {
     $routes->post('delete/(:num)', 'BrandController::delete/$1');
 });
 
+// Supplier Routes (With Auth Filter)
+$routes->group('supplier', ['filter' => 'auth'], function ($routes) {
+    $routes->get('/', 'SupplierController::index');
+    $routes->get('fetchSuppliers', 'SupplierController::fetchSuppliers');
+    $routes->get('getSupplier/(:num)', 'SupplierController::getSupplier/$1');
+    $routes->get('getForDropdown', 'SupplierController::getForDropdown');
+    $routes->post('create', 'SupplierController::create');
+    $routes->post('update/(:num)', 'SupplierController::update/$1');
+    $routes->post('delete/(:num)', 'SupplierController::delete/$1');
+});
+
+// Client Routes (With Auth Filter)
+$routes->group('client', ['filter' => 'auth'], function ($routes) {
+    $routes->get('/', 'ClientController::index');
+    $routes->get('fetchClients', 'ClientController::fetchClients');
+    $routes->get('getClient/(:num)', 'ClientController::getClient/$1');
+    $routes->get('getForDropdown', 'ClientController::getForDropdown');
+    $routes->post('create', 'ClientController::create');
+    $routes->post('update/(:num)', 'ClientController::update/$1');
+    $routes->post('delete/(:num)', 'ClientController::delete/$1');
+});
+
 $routes->group('product', ['filter' => 'auth'], function ($routes) {
     $routes->get('/', 'ProductController::index');
     $routes->get('fetchAll', 'ProductController::fetchAll');
@@ -45,14 +67,42 @@ $routes->group('product', ['filter' => 'auth'], function ($routes) {
     $routes->post('delete/(:num)', 'ProductController::delete/$1');
 });
 
+// Service Routes (With Auth Filter)
+$routes->group('service', ['filter' => 'auth'], function ($routes) {
+    $routes->get('/', 'ServiceController::index');
+    $routes->get('fetchAll', 'ServiceController::fetchAll');
+    $routes->post('store', 'ServiceController::store');
+    $routes->get('edit/(:num)', 'ServiceController::edit/$1');
+    $routes->post('update/(:num)', 'ServiceController::update/$1');
+    $routes->post('delete/(:num)', 'ServiceController::delete/$1');
+});
+
 $routes->group('purchase', ['filter' => 'auth'], function ($routes) {
     $routes->get('/', 'PurchaseController::index');
     $routes->post('store', 'PurchaseController::store');
+    $routes->get('findProductByCode', 'PurchaseController::findProductByCode');
+    $routes->get('searchProducts', 'PurchaseController::searchProducts');
 });
 
 $routes->group('sale', ['filter' => 'auth'], function ($routes) {
     $routes->get('/', 'SaleController::index');
+    $routes->get('list', 'SaleController::listTransactions');
     $routes->post('store', 'SaleController::store');
+
+    // Work Order Routes
+    $routes->get('updateWO/(:num)', 'SaleController::updateWO/$1');
+    $routes->get('getWorkOrderDetail/(:num)', 'SaleController::getWorkOrderDetail/$1');
+    $routes->post('addItemToWO', 'SaleController::addItemToWO');
+    $routes->post('addServiceToWO', 'SaleController::addServiceToWO');
+    $routes->post('finalizeWorkOrder', 'SaleController::finalizeWorkOrder');
+});
+
+// Invoice Routes (With Auth Filter)
+$routes->group('invoice', ['filter' => 'auth'], function ($routes) {
+    $routes->get('/', 'InvoiceController::index');
+    $routes->get('fetchInvoices', 'InvoiceController::fetchInvoices');
+    $routes->get('getDetail/(:num)', 'InvoiceController::getDetail/$1');
+    $routes->get('generatePDF/(:num)', 'InvoiceController::generatePDF/$1');
 });
 
 $routes->group('people', ['filter' => 'admin'], function ($routes) {
@@ -62,6 +112,14 @@ $routes->group('people', ['filter' => 'admin'], function ($routes) {
     $routes->get('edit/(:num)', 'PeopleController::edit/$1');
     $routes->post('update/(:num)', 'PeopleController::update/$1');
     $routes->post('delete/(:num)', 'PeopleController::delete/$1');
+});
+
+// Pricing Routes (Admin Only)
+$routes->group('pricing', ['filter' => 'admin'], function ($routes) {
+    $routes->get('/', 'PricingController::index');
+    $routes->get('fetchAll', 'PricingController::fetchAll');
+    $routes->post('updatePrice', 'PricingController::updatePrice');
+    $routes->post('bulkMarkUp', 'PricingController::bulkMarkUp');
 });
 
 $routes->group('report', ['filter' => 'auth'], function ($routes) {

@@ -10,7 +10,7 @@ class StockInModel extends Model
     protected $primaryKey = 'id';
     protected $useAutoIncrement = true;
     protected $returnType = 'array';
-    protected $allowedFields = ['nomor_transaksi', 'user_id', 'tanggal_masuk', 'supplier', 'catatan'];
+    protected $allowedFields = ['nomor_transaksi', 'supplier_id', 'user_id', 'tanggal_masuk', 'catatan'];
 
     // Timestamps
     protected $useTimestamps = false;

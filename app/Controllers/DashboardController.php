@@ -295,6 +295,181 @@ class DashboardController extends BaseController
             ->orderBy('value', 'DESC')
             ->get()->getResultArray();
 
+        // ------------- FINANCIAL SECTION -------------
+
+        // 1. Total Purchase Value (Stock In)
+        $bPurchaseValue = $this->db->table('tb_stock_in_items sii')
+            ->join('tb_stock_in si', 'si.id = sii.stock_in_id', 'inner')
+            ->select('SUM(sii.jumlah * sii.harga_beli_satuan) AS total', false)
+            ->where('si.tanggal_masuk >=', $startDT)
+            ->where('si.tanggal_masuk <=', $endDT);
+
+        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+            $bPurchaseValue->join('tb_products p', 'p.id = sii.product_id', 'inner');
+            $applyProductFilter($bPurchaseValue, 'p', true);
+        }
+
+        $rowPurchase = $bPurchaseValue->get()->getRowArray();
+        $totalPurchaseValue = (float) ($rowPurchase['total'] ?? 0);
+
+        // 2. Total Revenue (Stock Out)
+        $bRevenue = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS total', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+            $bRevenue->join('tb_products p', 'p.id = soi.product_id', 'inner');
+            $applyProductFilter($bRevenue, 'p', true);
+        }
+
+        $rowRevenue = $bRevenue->get()->getRowArray();
+        $totalRevenue = (float) ($rowRevenue['total'] ?? 0);
+
+        // 3. Total Profit (Revenue - Cost)
+        $bProfit = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->select('SUM(soi.jumlah * (soi.harga_jual_satuan - soi.harga_beli_satuan)) AS total', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+            $bProfit->join('tb_products p', 'p.id = soi.product_id', 'inner');
+            $applyProductFilter($bProfit, 'p', true);
+        }
+
+        $rowProfit = $bProfit->get()->getRowArray();
+        $totalProfit = (float) ($rowProfit['total'] ?? 0);
+
+        // 4. Inventory Value (Current Stock Value - not date filtered)
+        $bInventoryValue = $this->db->table('tb_products p')
+            ->join('tb_stock_in_items sii', 'sii.product_id = p.id', 'left')
+            ->select('p.id, p.stok_saat_ini')
+            ->select('COALESCE(AVG(sii.harga_beli_satuan), 0) AS avg_cost', false)
+            ->groupBy('p.id');
+
+        if (!empty($productId)) {
+            $bInventoryValue->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bInventoryValue->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bInventoryValue->where('p.category_id', (int) $categoryId);
+        }
+
+        $inventoryRows = $bInventoryValue->get()->getResultArray();
+        $inventoryValue = 0;
+        foreach ($inventoryRows as $row) {
+            $inventoryValue += (float) $row['stok_saat_ini'] * (float) $row['avg_cost'];
+        }
+
+        $financialCards = [
+            'inventory_value'     => $inventoryValue,
+            'total_purchase_value' => $totalPurchaseValue,
+            'total_revenue'       => $totalRevenue,
+            'total_profit'        => $totalProfit,
+        ];
+
+        // ------------- CHART 1: Profit vs Revenue Trend (Daily) -------------
+        $bProfitRevenueTrend = $this->db->table('tb_stock_out so')
+            ->join('tb_stock_out_items soi', 'soi.stock_out_id = so.id', 'inner')
+            ->select("DATE(so.tanggal_keluar) AS tanggal", false)
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS revenue', false)
+            ->select('SUM(soi.jumlah * (soi.harga_jual_satuan - soi.harga_beli_satuan)) AS profit', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+            $bProfitRevenueTrend->join('tb_products p', 'p.id = soi.product_id', 'inner');
+            $applyProductFilter($bProfitRevenueTrend, 'p', true);
+        }
+
+        $profitRevenueTrendRows = $bProfitRevenueTrend->groupBy('DATE(so.tanggal_keluar)')
+            ->orderBy('tanggal', 'ASC')
+            ->get()->getResultArray();
+
+        $profitRevenueTrend = [];
+        foreach ($profitRevenueTrendRows as $r) {
+            $profitRevenueTrend[] = [
+                'tanggal' => $r['tanggal'],
+                'revenue' => (float) ($r['revenue'] ?? 0),
+                'profit'  => (float) ($r['profit'] ?? 0),
+            ];
+        }
+
+        // ------------- CHART 2: Revenue by Category (Donut) -------------
+        $bRevenueByCategory = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->join('tb_products p', 'p.id = soi.product_id', 'inner')
+            ->join('tb_categories c', 'c.id = p.category_id', 'left')
+            ->select("COALESCE(c.nama_kategori, 'No Category') AS category_name", false)
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS value', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId)) {
+            $bRevenueByCategory->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bRevenueByCategory->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bRevenueByCategory->where('p.category_id', (int) $categoryId);
+        }
+
+        $revenueByCategory = $bRevenueByCategory->groupBy('p.category_id')
+            ->orderBy('value', 'DESC')
+            ->get()->getResultArray();
+
+        // ------------- CHART 3: Sales Velocity (Average Days to Sell) -------------
+        // Calculate average days between stock in and stock out for each product
+        $bSalesVelocity = $this->db->query("
+            SELECT 
+                p.nama_barang AS product_name,
+                COALESCE(AVG(DATEDIFF(so.tanggal_keluar, si.tanggal_masuk)), 0) AS avg_days_to_sell
+            FROM tb_stock_out_items soi
+            INNER JOIN tb_stock_out so ON so.id = soi.stock_out_id
+            INNER JOIN tb_products p ON p.id = soi.product_id
+            LEFT JOIN tb_stock_in_items sii ON sii.product_id = p.id
+            LEFT JOIN tb_stock_in si ON si.id = sii.stock_in_id
+            WHERE so.tanggal_keluar >= ? AND so.tanggal_keluar <= ?
+            " . (!empty($productId) ? " AND p.id = " . (int) $productId : "") . "
+            " . (!empty($brandId) ? " AND p.brand_id = " . (int) $brandId : "") . "
+            " . (!empty($categoryId) ? " AND p.category_id = " . (int) $categoryId : "") . "
+            GROUP BY p.id
+            ORDER BY avg_days_to_sell ASC
+            LIMIT 10
+        ", [$startDT, $endDT]);
+
+        $salesVelocity = $bSalesVelocity->getResultArray();
+
+        // ------------- CHART 4: Top 10 High Margin Products -------------
+        $bTopMargin = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->join('tb_products p', 'p.id = soi.product_id', 'inner')
+            ->select('p.nama_barang AS product_name')
+            ->select('AVG(((soi.harga_jual_satuan - soi.harga_beli_satuan) / soi.harga_beli_satuan) * 100) AS margin_percentage', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT)
+            ->where('soi.harga_beli_satuan >', 0);
+
+        if (!empty($productId)) {
+            $bTopMargin->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bTopMargin->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bTopMargin->where('p.category_id', (int) $categoryId);
+        }
+
+        $topMarginProducts = $bTopMargin->groupBy('p.id')
+            ->orderBy('margin_percentage', 'DESC')
+            ->limit(10)
+            ->get()->getResultArray();
+
         $payload = [
             'cards'              => $cards,
             'overview_chart'     => $overview,
@@ -305,6 +480,12 @@ class DashboardController extends BaseController
                 'brand'    => $donutByBrand,
                 'category' => $donutByCategory,
             ],
+            // Financial section
+            'financial_cards'         => $financialCards,
+            'profit_revenue_trend'    => $profitRevenueTrend,
+            'revenue_by_category'     => $revenueByCategory,
+            'sales_velocity'          => $salesVelocity,
+            'top_margin_products'     => $topMarginProducts,
         ];
 
         return $this->response->setJSON($payload);
