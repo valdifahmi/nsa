@@ -144,4 +144,6 @@ $routes->group('logs', ['filter' => 'admin'], function ($routes) {
 $routes->group('dashboard', ['filter' => 'auth'], function ($routes) {
     $routes->get('/', 'DashboardController::index');
     $routes->post('fetchData', 'DashboardController::fetchData');
+    $routes->post('fetchWarehouseData', 'DashboardController::fetchWarehouseData');
+    $routes->post('fetchWorkshopData', 'DashboardController::fetchWorkshopData');
 });

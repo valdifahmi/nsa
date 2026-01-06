@@ -365,11 +365,51 @@ class DashboardController extends BaseController
             $inventoryValue += (float) $row['stok_saat_ini'] * (float) $row['avg_cost'];
         }
 
+        // 5. Calculate PPN (11% of revenue)
+        $ppnAmount = $totalRevenue * 0.11;
+
+        // 6. Calculate PPh 23 (2% of service revenue - need to get service revenue)
+        $bServiceRevenue = $this->db->table('tb_stock_out_services sos')
+            ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
+            ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT)
+            ->get()->getRowArray();
+
+        $totalServiceRevenue = (float) ($bServiceRevenue['total'] ?? 0);
+        $pph23Amount = $totalServiceRevenue * 0.02;
+
+        // 7. Calculate Gross Margin %
+        $grossMarginPercent = ($totalRevenue > 0) ? (($totalProfit / $totalRevenue) * 100) : 0;
+
+        // 8. Count unpriced items (products without harga_jual_saat_ini)
+        $bUnpriced = $this->db->table('tb_products p')
+            ->groupStart()
+            ->where('p.harga_jual_saat_ini', 0)
+            ->orWhere('p.harga_jual_saat_ini IS NULL', null, false)
+            ->groupEnd();
+
+        if (!empty($productId)) {
+            $bUnpriced->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bUnpriced->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bUnpriced->where('p.category_id', (int) $categoryId);
+        }
+
+        $unpricedCount = $bUnpriced->countAllResults();
+
         $financialCards = [
-            'inventory_value'     => $inventoryValue,
+            'inventory_value'      => $inventoryValue,
             'total_purchase_value' => $totalPurchaseValue,
-            'total_revenue'       => $totalRevenue,
-            'total_profit'        => $totalProfit,
+            'total_revenue'        => $totalRevenue,
+            'total_profit'         => $totalProfit,
+            'gross_margin_percent' => $grossMarginPercent,
+            'ppn_amount'           => $ppnAmount,
+            'pph23_amount'         => $pph23Amount,
+            'unpriced_items_count' => $unpricedCount,
         ];
 
         // ------------- CHART 1: Profit vs Revenue Trend (Daily) -------------
@@ -428,7 +468,9 @@ class DashboardController extends BaseController
         $bSalesVelocity = $this->db->query("
             SELECT 
                 p.nama_barang AS product_name,
-                COALESCE(AVG(DATEDIFF(so.tanggal_keluar, si.tanggal_masuk)), 0) AS avg_days_to_sell
+                p.id AS product_id,
+                COALESCE(AVG(DATEDIFF(so.tanggal_keluar, si.tanggal_masuk)), 0) AS avg_days_to_sell,
+                SUM(soi.jumlah) AS total_sold
             FROM tb_stock_out_items soi
             INNER JOIN tb_stock_out so ON so.id = soi.stock_out_id
             INNER JOIN tb_products p ON p.id = soi.product_id
@@ -470,6 +512,32 @@ class DashboardController extends BaseController
             ->limit(10)
             ->get()->getResultArray();
 
+        // ------------- CHART 5: Top Products Cost vs Profit (Stacked Bar) -------------
+        $bCostProfitStack = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->join('tb_products p', 'p.id = soi.product_id', 'inner')
+            ->select('p.nama_barang AS product_name')
+            ->select('SUM(soi.jumlah * soi.harga_beli_satuan) AS total_cost', false)
+            ->select('SUM(soi.jumlah * (soi.harga_jual_satuan - soi.harga_beli_satuan)) AS total_profit', false)
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS total_revenue', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId)) {
+            $bCostProfitStack->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bCostProfitStack->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bCostProfitStack->where('p.category_id', (int) $categoryId);
+        }
+
+        $costProfitStack = $bCostProfitStack->groupBy('p.id')
+            ->orderBy('total_revenue', 'DESC')
+            ->limit(10)
+            ->get()->getResultArray();
+
         $payload = [
             'cards'              => $cards,
             'overview_chart'     => $overview,
@@ -486,8 +554,368 @@ class DashboardController extends BaseController
             'revenue_by_category'     => $revenueByCategory,
             'sales_velocity'          => $salesVelocity,
             'top_margin_products'     => $topMarginProducts,
+            'cost_profit_stack'       => $costProfitStack,
         ];
 
         return $this->response->setJSON($payload);
+    }
+
+    /**
+     * Fetch Warehouse Data Only
+     * Returns warehouse-specific data in JSON format
+     * POST params: startDate (Y-m-d), endDate (Y-m-d), productId, brandId, categoryId
+     */
+    public function fetchWarehouseData()
+    {
+        $startDate  = (string) $this->request->getPost('startDate');
+        $endDate    = (string) $this->request->getPost('endDate');
+        $productId  = (string) $this->request->getPost('productId');
+        $brandId    = (string) $this->request->getPost('brandId');
+        $categoryId = (string) $this->request->getPost('categoryId');
+
+        // Default last 30 days if not provided
+        if (empty($startDate) || empty($endDate)) {
+            $endDate   = date('Y-m-d');
+            $startDate = date('Y-m-d', strtotime('-29 days'));
+        }
+
+        $startDT = $startDate . ' 00:00:00';
+        $endDT   = $endDate . ' 23:59:59';
+
+        // ------------- Helper closure for dynamic filters -------------
+        $applyProductFilter = function ($builder, string $productAlias, bool $joinProductIfNeeded = false) use ($productId, $brandId, $categoryId) {
+            if (!empty($productId)) {
+                $builder->where("$productAlias.id", (int) $productId);
+            }
+            if (!empty($brandId)) {
+                if ($joinProductIfNeeded) {
+                    $builder->where("$productAlias.brand_id", (int) $brandId);
+                } else {
+                    $builder->where("$productAlias.brand_id", (int) $brandId);
+                }
+            }
+            if (!empty($categoryId)) {
+                if ($joinProductIfNeeded) {
+                    $builder->where("$productAlias.category_id", (int) $categoryId);
+                } else {
+                    $builder->where("$productAlias.category_id", (int) $categoryId);
+                }
+            }
+        };
+
+        // ------------- 1. Total Stock (sum of all product stock) -------------
+        $bTotalStock = $this->db->table('tb_products p')
+            ->selectSum('p.stok_saat_ini', 'total_stok');
+
+        if (!empty($productId)) {
+            $bTotalStock->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bTotalStock->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bTotalStock->where('p.category_id', (int) $categoryId);
+        }
+
+        $rowTotalStock = $bTotalStock->get()->getRowArray();
+        $totalStok = (int) ($rowTotalStock['total_stok'] ?? 0);
+
+        // ------------- 2. Stock In Volume (total qty barang masuk) -------------
+        $bStockInVolume = $this->db->table('tb_stock_in_items sii')
+            ->join('tb_stock_in si', 'si.id = sii.stock_in_id', 'inner');
+
+        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+            $bStockInVolume->join('tb_products p', 'p.id = sii.product_id', 'inner');
+            $applyProductFilter($bStockInVolume, 'p', true);
+        }
+
+        $bStockInVolume->where('si.tanggal_masuk >=', $startDT)
+            ->where('si.tanggal_masuk <=', $endDT)
+            ->selectSum('sii.jumlah', 'stock_in_volume');
+
+        $rowStockIn = $bStockInVolume->get()->getRowArray();
+        $stockInVolume = (int) ($rowStockIn['stock_in_volume'] ?? 0);
+
+        // ------------- 3. Stock Out Volume (total qty barang keluar) -------------
+        $bStockOutVolume = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner');
+
+        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+            $bStockOutVolume->join('tb_products p', 'p.id = soi.product_id', 'inner');
+            $applyProductFilter($bStockOutVolume, 'p', true);
+        }
+
+        $bStockOutVolume->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT)
+            ->selectSum('soi.jumlah', 'stock_out_volume');
+
+        $rowStockOut = $bStockOutVolume->get()->getRowArray();
+        $stockOutVolume = (int) ($rowStockOut['stock_out_volume'] ?? 0);
+
+        // ------------- 4. Active Work Order Count (status_work_order = 'Proses') -------------
+        $bActiveWO = $this->db->table('tb_stock_out so')
+            ->where('so.status_work_order', 'Proses')
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        // Note: Active WO count typically doesn't filter by product/brand/category
+        // But if needed, uncomment below:
+        // if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+        //     $bActiveWO->join('tb_stock_out_items soi', 'soi.stock_out_id = so.id', 'inner')
+        //               ->join('tb_products p', 'p.id = soi.product_id', 'inner');
+        //     $applyProductFilter($bActiveWO, 'p', true);
+        // }
+
+        $activeWOCount = $bActiveWO->countAllResults();
+
+        // ------------- 5. Sales Velocity Data (Top 10 Products) -------------
+        $salesVelocityQuery = "
+            SELECT 
+                p.nama_barang AS product_name,
+                p.id AS product_id,
+                COALESCE(AVG(DATEDIFF(so.tanggal_keluar, si.tanggal_masuk)), 0) AS avg_days_to_sell,
+                SUM(soi.jumlah) AS total_sold
+            FROM tb_stock_out_items soi
+            INNER JOIN tb_stock_out so ON so.id = soi.stock_out_id
+            INNER JOIN tb_products p ON p.id = soi.product_id
+            LEFT JOIN tb_stock_in_items sii ON sii.product_id = p.id
+            LEFT JOIN tb_stock_in si ON si.id = sii.stock_in_id
+            WHERE so.tanggal_keluar >= ? AND so.tanggal_keluar <= ?
+            " . (!empty($productId) ? " AND p.id = " . (int) $productId : "") . "
+            " . (!empty($brandId) ? " AND p.brand_id = " . (int) $brandId : "") . "
+            " . (!empty($categoryId) ? " AND p.category_id = " . (int) $categoryId : "") . "
+            GROUP BY p.id
+            ORDER BY avg_days_to_sell ASC
+            LIMIT 10
+        ";
+
+        $bSalesVelocity = $this->db->query($salesVelocityQuery, [$startDT, $endDT]);
+        $salesVelocityData = $bSalesVelocity->getResultArray();
+
+        // ------------- Prepare Warehouse Response -------------
+        $warehouseResponse = [
+            'total_stok'          => $totalStok,
+            'stock_in_volume'     => $stockInVolume,
+            'stock_out_volume'    => $stockOutVolume,
+            'active_wo_count'     => $activeWOCount,
+            'sales_velocity_data' => $salesVelocityData,
+        ];
+
+        return $this->response->setJSON([
+            'success'   => true,
+            'warehouse' => $warehouseResponse,
+        ]);
+    }
+
+    /**
+     * Fetch Workshop Data Only
+     * Returns workshop-specific data in JSON format
+     * POST params: startDate (Y-m-d), endDate (Y-m-d), productId, brandId, categoryId
+     */
+    public function fetchWorkshopData()
+    {
+        try {
+            $startDate  = (string) $this->request->getPost('startDate');
+            $endDate    = (string) $this->request->getPost('endDate');
+            $productId  = (string) $this->request->getPost('productId');
+            $brandId    = (string) $this->request->getPost('brandId');
+            $categoryId = (string) $this->request->getPost('categoryId');
+
+            // Default last 30 days if not provided
+            if (empty($startDate) || empty($endDate)) {
+                $endDate   = date('Y-m-d');
+                $startDate = date('Y-m-d', strtotime('-29 days'));
+            }
+
+            $startDT = $startDate . ' 00:00:00';
+            $endDT   = $endDate . ' 23:59:59';
+
+            // ------------- 1. Active Work Order Count (status_work_order = 'Proses') -------------
+            try {
+                $bActiveWO = $this->db->table('tb_stock_out so')
+                    ->where('so.status_work_order', 'Proses')
+                    ->where('so.tanggal_keluar >=', $startDT)
+                    ->where('so.tanggal_keluar <=', $endDT);
+
+                $activeWOCount = $bActiveWO->countAllResults();
+            } catch (\Exception $e) {
+                log_message('error', 'Error fetching active WO count: ' . $e->getMessage());
+                $activeWOCount = 0;
+            }
+
+            // ------------- 2. Total Service Done (tipe 'Workshop' + status 'Selesai') -------------
+            try {
+                $bServiceDone = $this->db->table('tb_stock_out so')
+                    ->where('so.tipe_transaksi', 'Workshop')
+                    ->where('so.status_work_order', 'Selesai')
+                    ->where('so.tanggal_keluar >=', $startDT)
+                    ->where('so.tanggal_keluar <=', $endDT);
+
+                $totalServiceDone = $bServiceDone->countAllResults();
+            } catch (\Exception $e) {
+                log_message('error', 'Error fetching service done count: ' . $e->getMessage());
+                $totalServiceDone = 0;
+            }
+
+            // ------------- 3. Total Service Nominal (SUM biaya_jasa from completed services) -------------
+            $totalServiceNominal = 0;
+            try {
+                $bServiceNominal = $this->db->table('tb_stock_out_services sos')
+                    ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
+                    ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total_nominal', false)
+                    ->where('so.status_work_order', 'Selesai')
+                    ->where('so.tanggal_keluar >=', $startDT)
+                    ->where('so.tanggal_keluar <=', $endDT);
+
+                $rowServiceNominal = $bServiceNominal->get()->getRowArray();
+                $totalServiceNominal = (float) ($rowServiceNominal['total_nominal'] ?? 0);
+            } catch (\Exception $e) {
+                log_message('error', 'Error fetching service nominal: ' . $e->getMessage());
+                $totalServiceNominal = 0;
+            }
+
+            // ------------- 4. Average Service Value -------------
+            $averageServiceValue = ($totalServiceDone > 0)
+                ? ($totalServiceNominal / $totalServiceDone)
+                : 0;
+
+            // ------------- 5. Top Services Data (Top 10 by frequency) -------------
+            $bTopServices = [];
+            try {
+                // Check if tb_services table exists
+                if ($this->db->tableExists('tb_services')) {
+                    $bTopServices = $this->db->table('tb_stock_out_services sos')
+                        ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
+                        ->join('tb_services s', 's.id = sos.service_id', 'inner')
+                        ->select('s.id AS service_id')
+                        ->select('s.nama_jasa AS service_name')
+                        ->select('SUM(sos.jumlah) AS frequency', false)
+                        ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total_revenue', false)
+                        ->select('AVG(sos.biaya_jasa) AS avg_price', false)
+                        ->select('COUNT(DISTINCT sos.stock_out_id) AS wo_count', false)
+                        ->where('so.tanggal_keluar >=', $startDT)
+                        ->where('so.tanggal_keluar <=', $endDT)
+                        ->groupBy('s.id')
+                        ->orderBy('frequency', 'DESC')
+                        ->limit(10)
+                        ->get()->getResultArray();
+                } else {
+                    log_message('error', 'Table tb_services does not exist');
+                }
+            } catch (\Exception $e) {
+                log_message('error', 'Error fetching top services: ' . $e->getMessage());
+                $bTopServices = [];
+            }
+
+            // ------------- 6. Workshop Activity Trend (Daily completed WO) -------------
+            $activityTrend = [];
+            try {
+                $bActivityTrend = $this->db->table('tb_stock_out so')
+                    ->select("DATE(so.tanggal_keluar) AS tanggal", false)
+                    ->select('COUNT(so.id) AS wo_completed', false)
+                    ->where('so.tipe_transaksi', 'Workshop')
+                    ->where('so.status_work_order', 'Selesai')
+                    ->where('so.tanggal_keluar >=', $startDT)
+                    ->where('so.tanggal_keluar <=', $endDT)
+                    ->groupBy('DATE(so.tanggal_keluar)')
+                    ->orderBy('tanggal', 'ASC')
+                    ->get()->getResultArray();
+
+                $activityTrend = $bActivityTrend;
+            } catch (\Exception $e) {
+                log_message('error', 'Error fetching workshop activity trend: ' . $e->getMessage());
+                $activityTrend = [];
+            }
+
+            // ------------- 7. Service vs Parts Ratio (Quantity-based for Workshop) -------------
+            $serviceVsPartsRatio = [
+                'total_service_qty' => 0,
+                'total_parts_qty' => 0,
+                'total_service_revenue' => 0,
+                'total_parts_revenue' => 0,
+            ];
+
+            try {
+                // Total Service Quantity (Workshop only)
+                $bServiceQty = $this->db->table('tb_stock_out_services sos')
+                    ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
+                    ->select('SUM(sos.jumlah) AS total_qty', false)
+                    ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total_revenue', false)
+                    ->where('so.tipe_transaksi', 'Workshop')
+                    ->where('so.tanggal_keluar >=', $startDT)
+                    ->where('so.tanggal_keluar <=', $endDT)
+                    ->get()->getRowArray();
+
+                $totalServiceQty = (int) ($bServiceQty['total_qty'] ?? 0);
+                $totalServiceRevenue = (float) ($bServiceQty['total_revenue'] ?? 0);
+
+                // Total Parts Quantity (Workshop only)
+                $bPartsQty = $this->db->table('tb_stock_out_items soi')
+                    ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+                    ->select('SUM(soi.jumlah) AS total_qty', false)
+                    ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS total_revenue', false)
+                    ->where('so.tipe_transaksi', 'Workshop')
+                    ->where('so.tanggal_keluar >=', $startDT)
+                    ->where('so.tanggal_keluar <=', $endDT);
+
+                // Apply product/brand/category filter if needed
+                if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+                    $bPartsQty->join('tb_products p', 'p.id = soi.product_id', 'inner');
+                    if (!empty($productId)) $bPartsQty->where('p.id', (int) $productId);
+                    if (!empty($brandId)) $bPartsQty->where('p.brand_id', (int) $brandId);
+                    if (!empty($categoryId)) $bPartsQty->where('p.category_id', (int) $categoryId);
+                }
+
+                $rowPartsQty = $bPartsQty->get()->getRowArray();
+                $totalPartsQty = (int) ($rowPartsQty['total_qty'] ?? 0);
+                $totalPartsRevenue = (float) ($rowPartsQty['total_revenue'] ?? 0);
+
+                $serviceVsPartsRatio = [
+                    'total_service_qty' => $totalServiceQty,
+                    'total_parts_qty' => $totalPartsQty,
+                    'total_service_revenue' => $totalServiceRevenue,
+                    'total_parts_revenue' => $totalPartsRevenue,
+                ];
+            } catch (\Exception $e) {
+                log_message('error', 'Error fetching service vs parts ratio: ' . $e->getMessage());
+                $serviceVsPartsRatio = [
+                    'total_service_qty' => 0,
+                    'total_parts_qty' => 0,
+                    'total_service_revenue' => 0,
+                    'total_parts_revenue' => 0,
+                ];
+            }
+
+            // ------------- Prepare Workshop Response -------------
+            $workshopResponse = [
+                'active_wo_count'       => $activeWOCount,
+                'total_service_done'    => $totalServiceDone,
+                'total_service_nominal' => $totalServiceNominal,
+                'average_service_value' => $averageServiceValue,
+                'top_services_data'     => $bTopServices,
+                'activity_trend'        => $activityTrend,
+                'service_vs_parts'      => $serviceVsPartsRatio,
+            ];
+
+            return $this->response->setJSON([
+                'success'  => true,
+                'workshop' => $workshopResponse,
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'Error in fetchWorkshopData: ' . $e->getMessage());
+
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'Failed to fetch workshop data',
+                'message' => $e->getMessage(),
+                'workshop' => [
+                    'active_wo_count'       => 0,
+                    'total_service_done'    => 0,
+                    'total_service_nominal' => 0,
+                    'average_service_value' => 0,
+                    'top_services_data'     => [],
+                ]
+            ]);
+        }
     }
 }
