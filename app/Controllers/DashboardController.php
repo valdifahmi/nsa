@@ -28,10 +28,18 @@ class DashboardController extends BaseController
      */
     public function index()
     {
+        // Set default dates based on the app's timezone
+        $appConfig = new \Config\App();
+        $tz        = new \DateTimeZone($appConfig->appTimezone);
+        $endDate   = new \DateTime('now', $tz);
+        $startDate = new \DateTime('first day of this month', $tz);
+
         $data = [
-            'products'   => $this->productModel->orderBy('nama_barang', 'ASC')->findAll(),
-            'brands'     => $this->brandModel->orderBy('nama_brand', 'ASC')->findAll(),
-            'categories' => $this->categoryModel->orderBy('nama_kategori', 'ASC')->findAll(),
+            'products'         => $this->productModel->orderBy('nama_barang', 'ASC')->findAll(),
+            'brands'           => $this->brandModel->orderBy('nama_brand', 'ASC')->findAll(),
+            'categories'       => $this->categoryModel->orderBy('nama_kategori', 'ASC')->findAll(),
+            'defaultStartDate' => $startDate->format('Y-m-d'),
+            'defaultEndDate'   => $endDate->format('Y-m-d'),
         ];
 
         return view('Dashboard/index', $data);
@@ -114,26 +122,98 @@ class DashboardController extends BaseController
         $rowOut = $bOut->get()->getRowArray();
         $totalKeluar = (int) ($rowOut['total_keluar'] ?? 0);
 
-        // Total Stok (apply product/brand/category only)
-        $bStock = $this->db->table('tb_products p')->selectSum('p.stok_saat_ini', 'total_stok');
+        // Total Stok (apply all filters, including date)
+        // This is a complex query to calculate historical stock at the `endDate`
+        $historicalStockQuery = "
+            SELECT
+                SUM(
+                    p.stok_saat_ini
+                    + COALESCE(so_after.total, 0)
+                    - COALESCE(si_after.total, 0)
+                ) as total_stok_hist
+            FROM tb_products p
+            LEFT JOIN (
+                SELECT
+                    sii_sub.product_id,
+                    SUM(sii_sub.jumlah) as total
+                FROM tb_stock_in_items sii_sub
+                JOIN tb_stock_in si_sub ON si_sub.id = sii_sub.stock_in_id
+                WHERE si_sub.tanggal_masuk > ?
+                GROUP BY sii_sub.product_id
+            ) AS si_after ON si_after.product_id = p.id
+            LEFT JOIN (
+                SELECT
+                    soi_sub.product_id,
+                    SUM(soi_sub.jumlah) as total
+                FROM tb_stock_out_items soi_sub
+                JOIN tb_stock_out so_sub ON so_sub.id = soi_sub.stock_out_id
+                WHERE so_sub.tanggal_keluar > ?
+                GROUP BY soi_sub.product_id
+            ) AS so_after ON so_after.product_id = p.id
+            WHERE 1=1
+        ";
+        $queryParams = [$endDT, $endDT];
 
         if (!empty($productId)) {
-            $bStock->where('p.id', (int) $productId);
+            $historicalStockQuery .= " AND p.id = ? ";
+            $queryParams[] = (int) $productId;
         }
         if (!empty($brandId)) {
-            $bStock->where('p.brand_id', (int) $brandId);
+            $historicalStockQuery .= " AND p.brand_id = ? ";
+            $queryParams[] = (int) $brandId;
         }
         if (!empty($categoryId)) {
-            $bStock->where('p.category_id', (int) $categoryId);
+            $historicalStockQuery .= " AND p.category_id = ? ";
+            $queryParams[] = (int) $categoryId;
         }
 
-        $rowStock = $bStock->get()->getRowArray();
-        $totalStok = (int) ($rowStock['total_stok'] ?? 0);
+        $rowStock = $this->db->query($historicalStockQuery, $queryParams)->getRowArray();
+        $totalStok = (int) ($rowStock['total_stok_hist'] ?? 0);
+
+
+        // ------------- Card: Avg. Stock Velocity -------------
+        $avgVelocityQuery = "
+            SELECT AVG(T.avg_days_to_sell) as average_velocity
+            FROM (
+                SELECT
+                    p.id,
+                    COALESCE(AVG(DATEDIFF(so.tanggal_keluar, si.tanggal_masuk)), 0) AS avg_days_to_sell
+                FROM tb_stock_out_items soi
+                INNER JOIN tb_stock_out so ON so.id = soi.stock_out_id
+                INNER JOIN tb_products p ON p.id = soi.product_id
+                LEFT JOIN tb_stock_in_items sii ON sii.product_id = p.id
+                LEFT JOIN tb_stock_in si ON si.id = sii.stock_in_id
+                WHERE so.tanggal_keluar >= ? AND so.tanggal_keluar <= ?
+        ";
+        $avgVelocityParams = [$startDT, $endDT];
+
+        if (!empty($productId)) {
+            $avgVelocityQuery .= " AND p.id = ? ";
+            $avgVelocityParams[] = (int) $productId;
+        }
+        if (!empty($brandId)) {
+            $avgVelocityQuery .= " AND p.brand_id = ? ";
+            $avgVelocityParams[] = (int) $brandId;
+        }
+        if (!empty($categoryId)) {
+            $avgVelocityQuery .= " AND p.category_id = ? ";
+            $avgVelocityParams[] = (int) $categoryId;
+        }
+
+        $avgVelocityQuery .= "
+                GROUP BY p.id
+            ) AS T
+        ";
+
+        $rowAvgVelocity = $this->db->query($avgVelocityQuery, $avgVelocityParams)->getRowArray();
+        $avgStockVelocity = (float) ($rowAvgVelocity['average_velocity'] ?? 0);
+
 
         $cards = [
-            'total_masuk'  => $totalMasuk,
-            'total_keluar' => $totalKeluar,
-            'total_stok'   => $totalStok,
+            'total_masuk'        => $totalMasuk,
+            'total_keluar'       => $totalKeluar,
+            'total_stok'         => $totalStok,
+            'avg_stock_velocity' => $avgStockVelocity,
         ];
 
         // ------------- Overview Chart (group by date) -------------
@@ -538,6 +618,115 @@ class DashboardController extends BaseController
             ->limit(10)
             ->get()->getResultArray();
 
+        // ------------- INTERACTIVE REVENUE DONUT CHARTS -------------
+
+        // 1. Revenue by Category (Top 9 + Others)
+        $bRevenueDonutCategory = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->join('tb_products p', 'p.id = soi.product_id', 'inner')
+            ->join('tb_categories c', 'c.id = p.category_id', 'left')
+            ->select("COALESCE(c.nama_kategori, 'No Category') AS label", false)
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS value', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId)) {
+            $bRevenueDonutCategory->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bRevenueDonutCategory->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bRevenueDonutCategory->where('p.category_id', (int) $categoryId);
+        }
+
+        $allCategoryRevenue = $bRevenueDonutCategory->groupBy('p.category_id')
+            ->orderBy('value', 'DESC')
+            ->get()->getResultArray();
+
+        // Group top 9 + others
+        $revenueDonutCategory = [];
+        $othersTotal = 0;
+        foreach ($allCategoryRevenue as $index => $item) {
+            if ($index < 9) {
+                $revenueDonutCategory[] = $item;
+            } else {
+                $othersTotal += (float) $item['value'];
+            }
+        }
+        if ($othersTotal > 0) {
+            $revenueDonutCategory[] = ['label' => 'Lainnya', 'value' => $othersTotal];
+        }
+
+        // 2. Revenue by Brand (Top 9 + Others)
+        $bRevenueDonutBrand = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->join('tb_products p', 'p.id = soi.product_id', 'inner')
+            ->join('tb_brands b', 'b.id = p.brand_id', 'left')
+            ->select("COALESCE(b.nama_brand, 'No Brand') AS label", false)
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS value', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId)) {
+            $bRevenueDonutBrand->where('p.id', (int) $productId);
+        }
+        if (!empty($brandId)) {
+            $bRevenueDonutBrand->where('p.brand_id', (int) $brandId);
+        }
+        if (!empty($categoryId)) {
+            $bRevenueDonutBrand->where('p.category_id', (int) $categoryId);
+        }
+
+        $allBrandRevenue = $bRevenueDonutBrand->groupBy('p.brand_id')
+            ->orderBy('value', 'DESC')
+            ->get()->getResultArray();
+
+        // Group top 9 + others
+        $revenueDonutBrand = [];
+        $othersTotal = 0;
+        foreach ($allBrandRevenue as $index => $item) {
+            if ($index < 9) {
+                $revenueDonutBrand[] = $item;
+            } else {
+                $othersTotal += (float) $item['value'];
+            }
+        }
+        if ($othersTotal > 0) {
+            $revenueDonutBrand[] = ['label' => 'Lainnya', 'value' => $othersTotal];
+        }
+
+        // 3. Revenue: Barang vs Jasa (Tax-accurate)
+        // Parts Revenue (Exclude PPN - already excluded in harga_jual_satuan)
+        $bPartsRevenue = $this->db->table('tb_stock_out_items soi')
+            ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS total', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT);
+
+        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
+            $bPartsRevenue->join('tb_products p', 'p.id = soi.product_id', 'inner');
+            $applyProductFilter($bPartsRevenue, 'p', true);
+        }
+
+        $rowPartsRev = $bPartsRevenue->get()->getRowArray();
+        $partsRevenue = (float) ($rowPartsRev['total'] ?? 0);
+
+        // Service Revenue (Include PPh 23 - Gross Amount)
+        $bServiceRevGross = $this->db->table('tb_stock_out_services sos')
+            ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
+            ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total', false)
+            ->where('so.tanggal_keluar >=', $startDT)
+            ->where('so.tanggal_keluar <=', $endDT)
+            ->get()->getRowArray();
+
+        $serviceRevenueGross = (float) ($bServiceRevGross['total'] ?? 0);
+
+        $revenueDonutType = [
+            ['label' => 'Revenue Barang', 'value' => $partsRevenue],
+            ['label' => 'Revenue Jasa', 'value' => $serviceRevenueGross],
+        ];
+
         $payload = [
             'cards'              => $cards,
             'overview_chart'     => $overview,
@@ -555,6 +744,12 @@ class DashboardController extends BaseController
             'sales_velocity'          => $salesVelocity,
             'top_margin_products'     => $topMarginProducts,
             'cost_profit_stack'       => $costProfitStack,
+            // Interactive Revenue Donut Charts
+            'revenue_donut_charts'    => [
+                'category' => $revenueDonutCategory,
+                'brand'    => $revenueDonutBrand,
+                'type'     => $revenueDonutType,
+            ],
         ];
 
         return $this->response->setJSON($payload);
