@@ -1081,6 +1081,49 @@ class DashboardController extends BaseController
                 ];
             }
 
+            // ------------- 8. Transaction Ratio ('Beli Putus' vs 'Workshop') -------------
+            $transactionRatio = [];
+            try {
+                $bTransactionRatio = $this->db->table('tb_stock_out')
+                    ->select("tipe_transaksi, COUNT(id) as count")
+                    ->where('tanggal_keluar >=', $startDT)
+                    ->where('tanggal_keluar <=', $endDT)
+                    ->whereIn('tipe_transaksi', ['Beli Putus', 'Workshop'])
+                    ->groupBy('tipe_transaksi')
+                    ->get()
+                    ->getResultArray();
+
+                $mappedData = [
+                    'Parts Only'    => 0, // 'Beli Putus'
+                    'With Services' => 0, // 'Workshop'
+                ];
+
+                foreach ($bTransactionRatio as $row) {
+                    if ($row['tipe_transaksi'] === 'Beli Putus') {
+                        $mappedData['Parts Only'] = (int) $row['count'];
+                    } elseif ($row['tipe_transaksi'] === 'Workshop') {
+                        $mappedData['With Services'] = (int) $row['count'];
+                    }
+                }
+
+                foreach ($mappedData as $label => $value) {
+                    $transactionRatio[] = ['label' => $label, 'value' => $value];
+                }
+                
+                // If no data, provide a default structure for the chart
+                if (empty($bTransactionRatio)) {
+                    $transactionRatio = [
+                        ['label' => 'Parts Only', 'value' => 0],
+                        ['label' => 'With Services', 'value' => 0],
+                    ];
+                }
+
+            } catch (\Exception $e) {
+                log_message('error', 'Error fetching transaction ratio: ' . $e->getMessage());
+                $transactionRatio = [['label' => 'Error', 'value' => 0]];
+            }
+
+
             // ------------- Prepare Workshop Response -------------
             $workshopResponse = [
                 'active_wo_count'       => $activeWOCount,
@@ -1090,6 +1133,7 @@ class DashboardController extends BaseController
                 'top_services_data'     => $bTopServices,
                 'activity_trend'        => $activityTrend,
                 'service_vs_parts'      => $serviceVsPartsRatio,
+                'transaction_ratio'     => $transactionRatio,
             ];
 
             return $this->response->setJSON([

@@ -567,37 +567,22 @@
             window.morrisServicePartsRatio = null;
         }
 
-        const totalServiceQty = parseInt(data.total_service_qty || 0, 10);
-        const totalPartsQty = parseInt(data.total_parts_qty || 0, 10);
-        const total = totalServiceQty + totalPartsQty;
+        // data is already in the format [{label: '...', value: ...}]
+        const total = data.reduce((acc, item) => acc + parseInt(item.value || 0, 10), 0);
 
         if (total === 0) {
             $('#service-parts-ratio-chart-div').html('<div class="text-center text-muted">No data available</div>');
             return;
         }
 
-        const chartData = [];
-        if (totalServiceQty > 0) {
-            chartData.push({
-                label: 'Service ',
-                value: totalServiceQty
-            });
-        }
-        if (totalPartsQty > 0) {
-            chartData.push({
-                label: 'Parts ',
-                value: totalPartsQty
-            });
-        }
-
         window.morrisServicePartsRatio = new Morris.Donut({
             element: 'service-parts-ratio-chart-div',
-            data: chartData,
-            colors: ['#06b6d4', '#8b5cf6'],
+            data: data,
+            colors: ['#f59e0b', '#3b82f6'], // Parts Only (Orange), With Services (Blue)
             resize: true,
             formatter: function(y) {
                 const percentage = total > 0 ? ((y / total) * 100).toFixed(1) : 0;
-                return `${numberFormat(y)} items (${percentage}%)`;
+                return `${numberFormat(y)} transaksi (${percentage}%)`;
             }
         });
     }
@@ -625,7 +610,7 @@
                         updateWorkshopCards(res.workshop);
                         updateTopServicesChart(res.workshop.top_services_data || []);
                         updateWorkshopActivityChart(res.workshop.activity_trend || []);
-                        updateServicePartsRatioChart(res.workshop.service_vs_parts || {});
+                        updateServicePartsRatioChart(res.workshop.transaction_ratio || []);
                     }
                 } catch (e) {
                     console.error('Error updating workshop data:', e);
