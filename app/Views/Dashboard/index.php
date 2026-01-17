@@ -430,7 +430,26 @@
     <!-- Financial Cards - Row 1 -->
     <div class="col-lg-12">
         <div class="row">
-            <div class="col-lg-4 col-md-6">
+            <div class="col-lg-3 col-md-3">
+                <div class="card card-block card-stretch card-height">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-4 card-total-sale">
+                            <div class="icon iq-icon-box-2" style="background: rgba(16, 185, 129, 0.1);">
+                                <i class="ri-wallet-2-line" style="font-size: 40px; color: #10b981;"></i>
+                            </div>
+                            <div>
+                                <p class="mb-2">Revenue (Ex. PPN)</p>
+                                <h4 id="card-revenue-value">Rp 0</h4>
+                            </div>
+                        </div>
+                        <div class="iq-progress-bar mt-2">
+                            <span class="iq-progress progress-1" style="width: 0%; background: #10b981;"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-3">
                 <div class="card card-block card-stretch card-height">
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-4 card-total-sale">
@@ -448,7 +467,52 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4 col-md-6">
+
+            <div class="col-lg-3 col-md-3">
+                <div class="card card-block card-stretch card-height">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-4 card-total-sale">
+                            <div class="icon iq-icon-box-2" style="background: rgba(99, 102, 241, 0.1);">
+                                <i class="ri-archive-line" style="font-size: 40px; color: #6366f1;"></i>
+                            </div>
+                            <div>
+                                <p class="mb-2">Potential Revenue</p>
+                                <h4 id="card-pot-revenue-value">Rp 0</h4>
+                            </div>
+                        </div>
+                        <div class="iq-progress-bar mt-2">
+                            <span class="iq-progress progress-1" style="width: 0%; background: #6366f1;"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-3">
+                <div class="card card-block card-stretch card-height">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-4 card-total-sale">
+                            <div class="icon iq-icon-box-2" style="background: rgba(239, 68, 68, 0.1);">
+                                <i class="ri-archive-line" style="font-size: 40px; color: #ef4444;"></i>
+                            </div>
+                            <div>
+                                <p class="mb-2">Potential Profit</p>
+                                <h4 id="card-pot-profit-value">Rp 0</h4>
+                            </div>
+                        </div>
+                        <div class="iq-progress-bar mt-2">
+                            <span class="iq-progress progress-1" style="width: 0%; background: #ef4444;"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Financial Cards - Row 2 -->
+    <div class="col-lg-12">
+        <div class="row">
+            <div class="col-lg-3 col-md-3">
                 <div class="card card-block card-stretch card-height">
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-4 card-total-sale">
@@ -466,7 +530,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4 col-md-6">
+            <div class="col-lg-3 col-md-3">
                 <div class="card card-block card-stretch card-height">
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-4 card-total-sale">
@@ -484,13 +548,7 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Financial Cards - Row 2 -->
-    <div class="col-lg-12">
-        <div class="row">
-            <div class="col-lg-6 col-md-6">
+            <div class="col-lg-3 col-md-3">
                 <div class="card card-block card-stretch card-height">
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-4 card-total-sale">
@@ -508,7 +566,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6 col-md-6">
+            <div class="col-lg-3 col-md-3">
                 <div class="card card-block card-stretch card-height">
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-4 card-total-sale">
@@ -566,16 +624,30 @@
 
 
 
-    <!-- Chart 4: Top Margin Products -->
+    <!-- Chart 4: Top 10 Revenue Products -->
     <div class="col-lg-6">
         <div class="card card-block card-stretch card-height">
             <div class="card-header d-flex justify-content-between">
                 <div class="header-title">
-                    <h4 class="card-title">Top 10 High Margin Products</h4>
+                    <h4 class="card-title">Top 10 Revenue Products</h4>
                 </div>
             </div>
             <div class="card-body">
-                <div id="top-margin-chart-div"></div>
+                <div id="top-revenue-chart-div"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 6: Top Clients by Revenue -->
+    <div class="col-lg-6">
+        <div class="card card-block card-stretch card-height">
+            <div class="card-header d-flex justify-content-between">
+                <div class="header-title">
+                    <h4 class="card-title">Top 10 Clients by Revenue</h4>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="top-clients-chart-div" style="height: 300px;"></div>
             </div>
         </div>
     </div>

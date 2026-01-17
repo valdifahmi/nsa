@@ -375,39 +375,25 @@ class DashboardController extends BaseController
             ->orderBy('value', 'DESC')
             ->get()->getResultArray();
 
-        // ------------- FINANCIAL SECTION -------------
+        // ------------- FINANCIAL SECTION (New Logic) -------------
 
-        // 1. Total Purchase Value (Stock In)
-        $bPurchaseValue = $this->db->table('tb_stock_in_items sii')
-            ->join('tb_stock_in si', 'si.id = sii.stock_in_id', 'inner')
-            ->select('SUM(sii.jumlah * sii.harga_beli_satuan) AS total', false)
-            ->where('si.tanggal_masuk >=', $startDT)
-            ->where('si.tanggal_masuk <=', $endDT);
-
-        if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
-            $bPurchaseValue->join('tb_products p', 'p.id = sii.product_id', 'inner');
-            $applyProductFilter($bPurchaseValue, 'p', true);
-        }
-
-        $rowPurchase = $bPurchaseValue->get()->getRowArray();
-        $totalPurchaseValue = (float) ($rowPurchase['total'] ?? 0);
-
-        // 2. Total Revenue (Stock Out)
-        $bRevenue = $this->db->table('tb_stock_out_items soi')
+        // Calculate Revenue (Ex. PPN), which is total revenue from product sales
+        $bRevenueExPPN = $this->db->table('tb_stock_out_items soi')
             ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
             ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS total', false)
             ->where('so.tanggal_keluar >=', $startDT)
-            ->where('so.tanggal_keluar <=', $endDT);
+            ->where('so.tanggal_keluar <=', $endDT)
+            ->where('soi.product_id IS NOT NULL'); // Ensure it's a product
 
         if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
-            $bRevenue->join('tb_products p', 'p.id = soi.product_id', 'inner');
-            $applyProductFilter($bRevenue, 'p', true);
+            $bRevenueExPPN->join('tb_products p', 'p.id = soi.product_id', 'inner');
+            $applyProductFilter($bRevenueExPPN, 'p', true);
         }
 
-        $rowRevenue = $bRevenue->get()->getRowArray();
-        $totalRevenue = (float) ($rowRevenue['total'] ?? 0);
+        $rowRevenueExPPN = $bRevenueExPPN->get()->getRowArray();
+        $revenueExPPN = (float) ($rowRevenueExPPN['total'] ?? 0);
 
-        // 3. Total Profit (Revenue - Cost)
+        // Calculate Gross Profit (Revenue - Cost of Goods Sold)
         $bProfit = $this->db->table('tb_stock_out_items soi')
             ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
             ->select('SUM(soi.jumlah * (soi.harga_jual_satuan - soi.harga_beli_satuan)) AS total', false)
@@ -420,35 +406,15 @@ class DashboardController extends BaseController
         }
 
         $rowProfit = $bProfit->get()->getRowArray();
-        $totalProfit = (float) ($rowProfit['total'] ?? 0);
+        $grossProfit = (float) ($rowProfit['total'] ?? 0);
 
-        // 4. Inventory Value (Current Stock Value - not date filtered)
-        $bInventoryValue = $this->db->table('tb_products p')
-            ->join('tb_stock_in_items sii', 'sii.product_id = p.id', 'left')
-            ->select('p.id, p.stok_saat_ini')
-            ->select('COALESCE(AVG(sii.harga_beli_satuan), 0) AS avg_cost', false)
-            ->groupBy('p.id');
+        // Calculate Gross Margin %
+        $grossMarginPercent = ($revenueExPPN > 0) ? (($grossProfit / $revenueExPPN) * 100) : 0;
 
-        if (!empty($productId)) {
-            $bInventoryValue->where('p.id', (int) $productId);
-        }
-        if (!empty($brandId)) {
-            $bInventoryValue->where('p.brand_id', (int) $brandId);
-        }
-        if (!empty($categoryId)) {
-            $bInventoryValue->where('p.category_id', (int) $categoryId);
-        }
+        // Calculate PPN (11% of product revenue)
+        $ppnAmount = $revenueExPPN * 0.11;
 
-        $inventoryRows = $bInventoryValue->get()->getResultArray();
-        $inventoryValue = 0;
-        foreach ($inventoryRows as $row) {
-            $inventoryValue += (float) $row['stok_saat_ini'] * (float) $row['avg_cost'];
-        }
-
-        // 5. Calculate PPN (11% of revenue)
-        $ppnAmount = $totalRevenue * 0.11;
-
-        // 6. Calculate PPh 23 (2% of service revenue - need to get service revenue)
+        // Calculate PPh 23 (2% of service revenue)
         $bServiceRevenue = $this->db->table('tb_stock_out_services sos')
             ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
             ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total', false)
@@ -459,10 +425,76 @@ class DashboardController extends BaseController
         $totalServiceRevenue = (float) ($bServiceRevenue['total'] ?? 0);
         $pph23Amount = $totalServiceRevenue * 0.02;
 
-        // 7. Calculate Gross Margin %
-        $grossMarginPercent = ($totalRevenue > 0) ? (($totalProfit / $totalRevenue) * 100) : 0;
+        // --- NEW METRICS: Historical Values as of endDate ---
 
-        // 8. Count unpriced items (products without harga_jual_saat_ini)
+        // Query to get stock level for each product at the historical date (endDate)
+        $historicalStockQuery = "
+            SELECT
+                p.id,
+                p.harga_beli_saat_ini,
+                p.harga_jual_saat_ini,
+                (
+                    p.stok_saat_ini
+                    + COALESCE(so_after.total, 0)
+                    - COALESCE(si_after.total, 0)
+                ) as historical_stock
+            FROM tb_products p
+            LEFT JOIN (
+                SELECT
+                    sii_sub.product_id,
+                    SUM(sii_sub.jumlah) as total
+                FROM tb_stock_in_items sii_sub
+                JOIN tb_stock_in si_sub ON si_sub.id = sii_sub.stock_in_id
+                WHERE si_sub.tanggal_masuk > ?
+                GROUP BY sii_sub.product_id
+            ) AS si_after ON si_after.product_id = p.id
+            LEFT JOIN (
+                SELECT
+                    soi_sub.product_id,
+                    SUM(soi_sub.jumlah) as total
+                FROM tb_stock_out_items soi_sub
+                JOIN tb_stock_out so_sub ON so_sub.id = soi_sub.stock_out_id
+                WHERE so_sub.tanggal_keluar > ?
+                GROUP BY soi_sub.product_id
+            ) AS so_after ON so_after.product_id = p.id
+            WHERE 1=1
+        ";
+
+        $historicalValueParams = [$endDT, $endDT];
+
+        // Apply filters to the historical value query
+        if (!empty($productId)) {
+            $historicalStockQuery .= " AND p.id = ? ";
+            $historicalValueParams[] = (int) $productId;
+        }
+        if (!empty($brandId)) {
+            $historicalStockQuery .= " AND p.brand_id = ? ";
+            $historicalValueParams[] = (int) $brandId;
+        }
+        if (!empty($categoryId)) {
+            $historicalStockQuery .= " AND p.category_id = ? ";
+            $historicalValueParams[] = (int) $categoryId;
+        }
+
+        $historicalProducts = $this->db->query($historicalStockQuery, $historicalValueParams)->getResultArray();
+
+        $inventoryValueHistorical = 0;
+        $potentialRevenue = 0;
+
+        foreach ($historicalProducts as $prod) {
+            $stock = (float) $prod['historical_stock'];
+            if ($stock > 0) {
+                // Inventory Value: Historical Stock x Purchase Price
+                $inventoryValueHistorical += $stock * (float)$prod['harga_beli_saat_ini'];
+                // Potential Revenue: Historical Stock x Selling Price
+                $potentialRevenue += $stock * (float)$prod['harga_jual_saat_ini'];
+            }
+        }
+
+        // Potential Profit: Potential Revenue - Historical Inventory Value
+        $potentialProfit = $potentialRevenue - $inventoryValueHistorical;
+
+        // Count unpriced items (products without a selling price)
         $bUnpriced = $this->db->table('tb_products p')
             ->groupStart()
             ->where('p.harga_jual_saat_ini', 0)
@@ -481,15 +513,17 @@ class DashboardController extends BaseController
 
         $unpricedCount = $bUnpriced->countAllResults();
 
+        // Assemble the 8 financial cards
         $financialCards = [
-            'inventory_value'      => $inventoryValue,
-            'total_purchase_value' => $totalPurchaseValue,
-            'total_revenue'        => $totalRevenue,
-            'total_profit'         => $totalProfit,
-            'gross_margin_percent' => $grossMarginPercent,
-            'ppn_amount'           => $ppnAmount,
-            'pph23_amount'         => $pph23Amount,
-            'unpriced_items_count' => $unpricedCount,
+            'revenue_ex_ppn'             => $revenueExPPN + $totalServiceRevenue,
+            'gross_profit'               => $grossProfit,
+            'margin_percent'             => $grossMarginPercent,
+            'ppn'                        => $ppnAmount,
+            'pph_23'                     => $pph23Amount,
+            'inventory_value_historical' => $inventoryValueHistorical,
+            'potential_revenue'          => $potentialRevenue,
+            'potential_profit'           => $potentialProfit,
+            'unpriced_items_count'       => $unpricedCount,
         ];
 
         // ------------- CHART 1: Profit vs Revenue Trend (Daily) -------------
@@ -567,28 +601,27 @@ class DashboardController extends BaseController
 
         $salesVelocity = $bSalesVelocity->getResultArray();
 
-        // ------------- CHART 4: Top 10 High Margin Products -------------
-        $bTopMargin = $this->db->table('tb_stock_out_items soi')
+        // ------------- CHART 4: Top 10 Revenue Products -------------
+        $bTopRevenue = $this->db->table('tb_stock_out_items soi')
             ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
             ->join('tb_products p', 'p.id = soi.product_id', 'inner')
             ->select('p.nama_barang AS product_name')
-            ->select('AVG(((soi.harga_jual_satuan - soi.harga_beli_satuan) / soi.harga_beli_satuan) * 100) AS margin_percentage', false)
+            ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS total_revenue', false)
             ->where('so.tanggal_keluar >=', $startDT)
-            ->where('so.tanggal_keluar <=', $endDT)
-            ->where('soi.harga_beli_satuan >', 0);
+            ->where('so.tanggal_keluar <=', $endDT);
 
         if (!empty($productId)) {
-            $bTopMargin->where('p.id', (int) $productId);
+            $bTopRevenue->where('p.id', (int) $productId);
         }
         if (!empty($brandId)) {
-            $bTopMargin->where('p.brand_id', (int) $brandId);
+            $bTopRevenue->where('p.brand_id', (int) $brandId);
         }
         if (!empty($categoryId)) {
-            $bTopMargin->where('p.category_id', (int) $categoryId);
+            $bTopRevenue->where('p.category_id', (int) $categoryId);
         }
 
-        $topMarginProducts = $bTopMargin->groupBy('p.id')
-            ->orderBy('margin_percentage', 'DESC')
+        $topRevenueProducts = $bTopRevenue->groupBy('p.id')
+            ->orderBy('total_revenue', 'DESC')
             ->limit(10)
             ->get()->getResultArray();
 
@@ -618,9 +651,59 @@ class DashboardController extends BaseController
             ->limit(10)
             ->get()->getResultArray();
 
-        // ------------- INTERACTIVE REVENUE DONUT CHARTS -------------
+        // ------------- CHART 6: Top 10 Clients by Revenue (Stacked Bar) -------------
+        $partsFilterSQL = "";
+        $partsQueryParams = [$startDT, $endDT];
 
-        // 1. Revenue by Category (Top 9 + Others)
+        if (!empty($productId)) {
+            $partsFilterSQL .= " AND p.id = ? ";
+            $partsQueryParams[] = (int) $productId;
+        }
+        if (!empty($brandId)) {
+            $partsFilterSQL .= " AND p.brand_id = ? ";
+            $partsQueryParams[] = (int) $brandId;
+        }
+        if (!empty($categoryId)) {
+            $partsFilterSQL .= " AND p.category_id = ? ";
+            $partsQueryParams[] = (int) $categoryId;
+        }
+
+        $topClientsQuery = "
+            SELECT
+                c.nama_klien,
+                COALESCE(parts.total, 0) as revenue_barang,
+                COALESCE(services.total, 0) as revenue_jasa,
+                (COALESCE(parts.total, 0) + COALESCE(services.total, 0)) as total_revenue
+            FROM tb_clients c
+            LEFT JOIN (
+                SELECT
+                    so.client_id,
+                    SUM(soi.jumlah * soi.harga_jual_satuan) as total
+                FROM tb_stock_out_items soi
+                JOIN tb_stock_out so ON so.id = soi.stock_out_id
+                JOIN tb_products p ON p.id = soi.product_id
+                WHERE so.tanggal_keluar >= ? AND so.tanggal_keluar <= ? AND so.client_id IS NOT NULL
+                $partsFilterSQL
+                GROUP BY so.client_id
+            ) AS parts ON c.id = parts.client_id
+            LEFT JOIN (
+                SELECT
+                    so.client_id,
+                    SUM(sos.jumlah * sos.biaya_jasa) as total
+                FROM tb_stock_out_services sos
+                JOIN tb_stock_out so ON so.id = sos.stock_out_id
+                WHERE so.tanggal_keluar >= ? AND so.tanggal_keluar <= ? AND so.client_id IS NOT NULL
+                GROUP BY so.client_id
+            ) AS services ON c.id = services.client_id
+            WHERE COALESCE(parts.total, 0) > 0 OR COALESCE(services.total, 0) > 0
+            ORDER BY total_revenue DESC
+            LIMIT 10
+        ";
+
+        $finalQueryParams = array_merge($partsQueryParams, [$startDT, $endDT]);
+        $topClientsRevenue = $this->db->query($topClientsQuery, $finalQueryParams)->getResultArray();
+
+        // ------------- INTERACTIVE REVENUE DONUT CHARTS -------------
         $bRevenueDonutCategory = $this->db->table('tb_stock_out_items soi')
             ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
             ->join('tb_products p', 'p.id = soi.product_id', 'inner')
@@ -742,8 +825,9 @@ class DashboardController extends BaseController
             'profit_revenue_trend'    => $profitRevenueTrend,
             'revenue_by_category'     => $revenueByCategory,
             'sales_velocity'          => $salesVelocity,
-            'top_margin_products'     => $topMarginProducts,
+            'top_revenue_products'    => $topRevenueProducts,
             'cost_profit_stack'       => $costProfitStack,
+            'top_clients_revenue'     => $topClientsRevenue,
             // Interactive Revenue Donut Charts
             'revenue_donut_charts'    => [
                 'category' => $revenueDonutCategory,
@@ -925,204 +1009,169 @@ class DashboardController extends BaseController
             $startDT = $startDate . ' 00:00:00';
             $endDT   = $endDate . ' 23:59:59';
 
-            // ------------- 1. Active Work Order Count (status_work_order = 'Proses') -------------
-            try {
-                $bActiveWO = $this->db->table('tb_stock_out so')
-                    ->where('so.status_work_order', 'Proses')
-                    ->where('so.tanggal_keluar >=', $startDT)
-                    ->where('so.tanggal_keluar <=', $endDT);
+            // --- Subquery for filtering by product/brand/category ---
+            $productFilterActive = !empty($productId) || !empty($brandId) || !empty($categoryId);
+            $subQuery = null;
+            if ($productFilterActive) {
+                $subQuery = $this->db->table('tb_stock_out_items soi')
+                    ->select('soi.stock_out_id')
+                    ->join('tb_products p', 'p.id = soi.product_id', 'inner');
 
-                $activeWOCount = $bActiveWO->countAllResults();
-            } catch (\Exception $e) {
-                log_message('error', 'Error fetching active WO count: ' . $e->getMessage());
-                $activeWOCount = 0;
+                if (!empty($productId)) $subQuery->where('p.id', (int)$productId);
+                if (!empty($brandId)) $subQuery->where('p.brand_id', (int)$brandId);
+                if (!empty($categoryId)) $subQuery->where('p.category_id', (int)$categoryId);
             }
+
+            // ------------- 1. Active Work Order Count (status_work_order = 'Proses') -------------
+            $bActiveWO = $this->db->table('tb_stock_out so')
+                ->where('so.status_work_order', 'Proses')
+                ->where('so.tanggal_keluar >=', $startDT)
+                ->where('so.tanggal_keluar <=', $endDT);
+
+            if ($productFilterActive) {
+                $bActiveWO->whereIn('so.id', $subQuery);
+            }
+            $activeWOCount = $bActiveWO->countAllResults();
+
 
             // ------------- 2. Total Service Done (tipe 'Workshop' + status 'Selesai') -------------
-            try {
-                $bServiceDone = $this->db->table('tb_stock_out so')
-                    ->where('so.tipe_transaksi', 'Workshop')
-                    ->where('so.status_work_order', 'Selesai')
-                    ->where('so.tanggal_keluar >=', $startDT)
-                    ->where('so.tanggal_keluar <=', $endDT);
+            $bServiceDone = $this->db->table('tb_stock_out so')
+                ->where('so.tipe_transaksi', 'Workshop')
+                ->where('so.status_work_order', 'Selesai')
+                ->where('so.tanggal_keluar >=', $startDT)
+                ->where('so.tanggal_keluar <=', $endDT);
 
-                $totalServiceDone = $bServiceDone->countAllResults();
-            } catch (\Exception $e) {
-                log_message('error', 'Error fetching service done count: ' . $e->getMessage());
-                $totalServiceDone = 0;
+            if ($productFilterActive) {
+                $bServiceDone->whereIn('so.id', $subQuery);
             }
+            $totalServiceDone = $bServiceDone->countAllResults();
 
             // ------------- 3. Total Service Nominal (SUM biaya_jasa from completed services) -------------
-            $totalServiceNominal = 0;
-            try {
-                $bServiceNominal = $this->db->table('tb_stock_out_services sos')
-                    ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
-                    ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total_nominal', false)
-                    ->where('so.status_work_order', 'Selesai')
-                    ->where('so.tanggal_keluar >=', $startDT)
-                    ->where('so.tanggal_keluar <=', $endDT);
+            $bServiceNominal = $this->db->table('tb_stock_out_services sos')
+                ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
+                ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total_nominal', false)
+                ->where('so.status_work_order', 'Selesai')
+                ->where('so.tanggal_keluar >=', $startDT)
+                ->where('so.tanggal_keluar <=', $endDT);
 
-                $rowServiceNominal = $bServiceNominal->get()->getRowArray();
-                $totalServiceNominal = (float) ($rowServiceNominal['total_nominal'] ?? 0);
-            } catch (\Exception $e) {
-                log_message('error', 'Error fetching service nominal: ' . $e->getMessage());
-                $totalServiceNominal = 0;
+            if ($productFilterActive) {
+                $bServiceNominal->whereIn('so.id', $subQuery);
             }
+            $rowServiceNominal = $bServiceNominal->get()->getRowArray();
+            $totalServiceNominal = (float) ($rowServiceNominal['total_nominal'] ?? 0);
 
             // ------------- 4. Average Service Value -------------
-            $averageServiceValue = ($totalServiceDone > 0)
-                ? ($totalServiceNominal / $totalServiceDone)
-                : 0;
+            $averageServiceValue = ($totalServiceDone > 0) ? ($totalServiceNominal / $totalServiceDone) : 0;
 
             // ------------- 5. Top Services Data (Top 10 by frequency) -------------
             $bTopServices = [];
-            try {
-                // Check if tb_services table exists
-                if ($this->db->tableExists('tb_services')) {
-                    $bTopServices = $this->db->table('tb_stock_out_services sos')
-                        ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
-                        ->join('tb_services s', 's.id = sos.service_id', 'inner')
-                        ->select('s.id AS service_id')
-                        ->select('s.nama_jasa AS service_name')
-                        ->select('SUM(sos.jumlah) AS frequency', false)
-                        ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total_revenue', false)
-                        ->select('AVG(sos.biaya_jasa) AS avg_price', false)
-                        ->select('COUNT(DISTINCT sos.stock_out_id) AS wo_count', false)
-                        ->where('so.tanggal_keluar >=', $startDT)
-                        ->where('so.tanggal_keluar <=', $endDT)
-                        ->groupBy('s.id')
-                        ->orderBy('frequency', 'DESC')
-                        ->limit(10)
-                        ->get()->getResultArray();
-                } else {
-                    log_message('error', 'Table tb_services does not exist');
-                }
-            } catch (\Exception $e) {
-                log_message('error', 'Error fetching top services: ' . $e->getMessage());
-                $bTopServices = [];
-            }
-
-            // ------------- 6. Workshop Activity Trend (Daily completed WO) -------------
-            $activityTrend = [];
-            try {
-                $bActivityTrend = $this->db->table('tb_stock_out so')
-                    ->select("DATE(so.tanggal_keluar) AS tanggal", false)
-                    ->select('COUNT(so.id) AS wo_completed', false)
-                    ->where('so.tipe_transaksi', 'Workshop')
-                    ->where('so.status_work_order', 'Selesai')
-                    ->where('so.tanggal_keluar >=', $startDT)
-                    ->where('so.tanggal_keluar <=', $endDT)
-                    ->groupBy('DATE(so.tanggal_keluar)')
-                    ->orderBy('tanggal', 'ASC')
-                    ->get()->getResultArray();
-
-                $activityTrend = $bActivityTrend;
-            } catch (\Exception $e) {
-                log_message('error', 'Error fetching workshop activity trend: ' . $e->getMessage());
-                $activityTrend = [];
-            }
-
-            // ------------- 7. Service vs Parts Ratio (Quantity-based for Workshop) -------------
-            $serviceVsPartsRatio = [
-                'total_service_qty' => 0,
-                'total_parts_qty' => 0,
-                'total_service_revenue' => 0,
-                'total_parts_revenue' => 0,
-            ];
-
-            try {
-                // Total Service Quantity (Workshop only)
-                $bServiceQty = $this->db->table('tb_stock_out_services sos')
+            if ($this->db->tableExists('tb_services')) {
+                $bTopServicesQuery = $this->db->table('tb_stock_out_services sos')
                     ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
-                    ->select('SUM(sos.jumlah) AS total_qty', false)
-                    ->select('SUM(sos.biaya_jasa * sos.jumlah) AS total_revenue', false)
-                    ->where('so.tipe_transaksi', 'Workshop')
-                    ->where('so.tanggal_keluar >=', $startDT)
-                    ->where('so.tanggal_keluar <=', $endDT)
-                    ->get()->getRowArray();
-
-                $totalServiceQty = (int) ($bServiceQty['total_qty'] ?? 0);
-                $totalServiceRevenue = (float) ($bServiceQty['total_revenue'] ?? 0);
-
-                // Total Parts Quantity (Workshop only)
-                $bPartsQty = $this->db->table('tb_stock_out_items soi')
-                    ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
-                    ->select('SUM(soi.jumlah) AS total_qty', false)
-                    ->select('SUM(soi.jumlah * soi.harga_jual_satuan) AS total_revenue', false)
-                    ->where('so.tipe_transaksi', 'Workshop')
+                    ->join('tb_services s', 's.id = sos.service_id', 'inner')
+                    ->select('s.id AS service_id, s.nama_jasa AS service_name, SUM(sos.jumlah) AS frequency, SUM(sos.biaya_jasa * sos.jumlah) AS total_revenue, AVG(sos.biaya_jasa) AS avg_price, COUNT(DISTINCT sos.stock_out_id) AS wo_count', false)
                     ->where('so.tanggal_keluar >=', $startDT)
                     ->where('so.tanggal_keluar <=', $endDT);
 
-                // Apply product/brand/category filter if needed
-                if (!empty($productId) || !empty($brandId) || !empty($categoryId)) {
-                    $bPartsQty->join('tb_products p', 'p.id = soi.product_id', 'inner');
-                    if (!empty($productId)) $bPartsQty->where('p.id', (int) $productId);
-                    if (!empty($brandId)) $bPartsQty->where('p.brand_id', (int) $brandId);
-                    if (!empty($categoryId)) $bPartsQty->where('p.category_id', (int) $categoryId);
+                if ($productFilterActive) {
+                    $bTopServicesQuery->whereIn('so.id', $subQuery);
                 }
 
-                $rowPartsQty = $bPartsQty->get()->getRowArray();
-                $totalPartsQty = (int) ($rowPartsQty['total_qty'] ?? 0);
-                $totalPartsRevenue = (float) ($rowPartsQty['total_revenue'] ?? 0);
-
-                $serviceVsPartsRatio = [
-                    'total_service_qty' => $totalServiceQty,
-                    'total_parts_qty' => $totalPartsQty,
-                    'total_service_revenue' => $totalServiceRevenue,
-                    'total_parts_revenue' => $totalPartsRevenue,
-                ];
-            } catch (\Exception $e) {
-                log_message('error', 'Error fetching service vs parts ratio: ' . $e->getMessage());
-                $serviceVsPartsRatio = [
-                    'total_service_qty' => 0,
-                    'total_parts_qty' => 0,
-                    'total_service_revenue' => 0,
-                    'total_parts_revenue' => 0,
-                ];
+                $bTopServices = $bTopServicesQuery->groupBy('s.id')
+                    ->orderBy('frequency', 'DESC')
+                    ->limit(10)
+                    ->get()->getResultArray();
             }
+
+            // ------------- 6. Workshop Activity Trend (Daily completed WO) -------------
+            $bActivityTrend = $this->db->table('tb_stock_out so')
+                ->select("DATE(so.tanggal_keluar) AS tanggal", false)
+                ->select('COUNT(so.id) AS wo_completed', false)
+                ->where('so.tipe_transaksi', 'Workshop')
+                ->where('so.status_work_order', 'Selesai')
+                ->where('so.tanggal_keluar >=', $startDT)
+                ->where('so.tanggal_keluar <=', $endDT);
+
+            if ($productFilterActive) {
+                $bActivityTrend->whereIn('so.id', $subQuery);
+            }
+            $activityTrend = $bActivityTrend->groupBy('DATE(so.tanggal_keluar)')
+                ->orderBy('tanggal', 'ASC')
+                ->get()->getResultArray();
+
+            // ------------- 7. Service vs Parts Ratio (Quantity-based for Workshop) -------------
+            // Total Service Quantity (Workshop only)
+            $bServiceQty = $this->db->table('tb_stock_out_services sos')
+                ->join('tb_stock_out so', 'so.id = sos.stock_out_id', 'inner')
+                ->select('SUM(sos.jumlah) AS total_qty, SUM(sos.biaya_jasa * sos.jumlah) AS total_revenue', false)
+                ->where('so.tipe_transaksi', 'Workshop')
+                ->where('so.tanggal_keluar >=', $startDT)
+                ->where('so.tanggal_keluar <=', $endDT);
+
+            if ($productFilterActive) {
+                $bServiceQty->whereIn('so.id', $subQuery);
+            }
+            $rowServiceQty = $bServiceQty->get()->getRowArray();
+            $totalServiceQty = (int) ($rowServiceQty['total_qty'] ?? 0);
+            $totalServiceRevenue = (float) ($rowServiceQty['total_revenue'] ?? 0);
+
+            // Total Parts Quantity (Workshop only)
+            $bPartsQty = $this->db->table('tb_stock_out_items soi')
+                ->join('tb_stock_out so', 'so.id = soi.stock_out_id', 'inner')
+                ->select('SUM(soi.jumlah) AS total_qty, SUM(soi.jumlah * soi.harga_jual_satuan) AS total_revenue', false)
+                ->where('so.tipe_transaksi', 'Workshop')
+                ->where('so.tanggal_keluar >=', $startDT)
+                ->where('so.tanggal_keluar <=', $endDT);
+
+            if ($productFilterActive) {
+                // Here we can join directly since we start from tb_stock_out_items
+                $bPartsQty->join('tb_products p', 'p.id = soi.product_id', 'inner');
+                if (!empty($productId)) $bPartsQty->where('p.id', (int) $productId);
+                if (!empty($brandId)) $bPartsQty->where('p.brand_id', (int) $brandId);
+                if (!empty($categoryId)) $bPartsQty->where('p.category_id', (int) $categoryId);
+            }
+            $rowPartsQty = $bPartsQty->get()->getRowArray();
+            $totalPartsQty = (int) ($rowPartsQty['total_qty'] ?? 0);
+            $totalPartsRevenue = (float) ($rowPartsQty['total_revenue'] ?? 0);
+
+            $serviceVsPartsRatio = [
+                'total_service_qty' => $totalServiceQty,
+                'total_parts_qty' => $totalPartsQty,
+                'total_service_revenue' => $totalServiceRevenue,
+                'total_parts_revenue' => $totalPartsRevenue,
+            ];
 
             // ------------- 8. Transaction Ratio ('Beli Putus' vs 'Workshop') -------------
-            $transactionRatio = [];
-            try {
-                $bTransactionRatio = $this->db->table('tb_stock_out')
-                    ->select("tipe_transaksi, COUNT(id) as count")
-                    ->where('tanggal_keluar >=', $startDT)
-                    ->where('tanggal_keluar <=', $endDT)
-                    ->whereIn('tipe_transaksi', ['Beli Putus', 'Workshop'])
-                    ->groupBy('tipe_transaksi')
-                    ->get()
-                    ->getResultArray();
+            $bTransactionRatio = $this->db->table('tb_stock_out so')
+                // Gunakan alias tabel untuk menghindari error kolom ambigu
+                ->select("so.tipe_transaksi, COUNT(so.id) as count")
+                ->where('so.tanggal_keluar >=', $startDT)
+                ->where('so.tanggal_keluar <=', $endDT)
+                ->whereIn('so.tipe_transaksi', ['Beli Putus', 'Workshop']);
 
-                $mappedData = [
-                    'Parts Only'    => 0, // 'Beli Putus'
-                    'With Services' => 0, // 'Workshop'
-                ];
-
-                foreach ($bTransactionRatio as $row) {
-                    if ($row['tipe_transaksi'] === 'Beli Putus') {
-                        $mappedData['Parts Only'] = (int) $row['count'];
-                    } elseif ($row['tipe_transaksi'] === 'Workshop') {
-                        $mappedData['With Services'] = (int) $row['count'];
-                    }
-                }
-
-                foreach ($mappedData as $label => $value) {
-                    $transactionRatio[] = ['label' => $label, 'value' => $value];
-                }
-                
-                // If no data, provide a default structure for the chart
-                if (empty($bTransactionRatio)) {
-                    $transactionRatio = [
-                        ['label' => 'Parts Only', 'value' => 0],
-                        ['label' => 'With Services', 'value' => 0],
-                    ];
-                }
-
-            } catch (\Exception $e) {
-                log_message('error', 'Error fetching transaction ratio: ' . $e->getMessage());
-                $transactionRatio = [['label' => 'Error', 'value' => 0]];
+            if ($productFilterActive) {
+                // Memastikan filter produk tetap berjalan melalui subquery
+                $bTransactionRatio->whereIn('so.id', $subQuery);
             }
 
+            $transactionRatioResult = $bTransactionRatio->groupBy('so.tipe_transaksi')->get()->getResultArray();
+
+            // Inisialisasi default menjamin chart tidak error jika data kosong
+            $mappedData = ['Parts Only' => 0, 'With Services' => 0];
+
+            foreach ($transactionRatioResult as $row) {
+                if ($row['tipe_transaksi'] === 'Beli Putus') {
+                    $mappedData['Parts Only'] = (int) $row['count'];
+                } elseif ($row['tipe_transaksi'] === 'Workshop') {
+                    $mappedData['With Services'] = (int) $row['count'];
+                }
+            }
+
+            // Format final untuk dikonsumsi frontend (Chart.js/amCharts/Morris)
+            $transactionRatio = [];
+            foreach ($mappedData as $label => $value) {
+                $transactionRatio[] = ['label' => $label, 'value' => $value];
+            }
 
             // ------------- Prepare Workshop Response -------------
             $workshopResponse = [
@@ -1147,13 +1196,6 @@ class DashboardController extends BaseController
                 'success' => false,
                 'error'   => 'Failed to fetch workshop data',
                 'message' => $e->getMessage(),
-                'workshop' => [
-                    'active_wo_count'       => 0,
-                    'total_service_done'    => 0,
-                    'total_service_nominal' => 0,
-                    'average_service_value' => 0,
-                    'top_services_data'     => [],
-                ]
             ]);
         }
     }

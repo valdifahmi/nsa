@@ -202,45 +202,41 @@
     }
 
     function updateFinancialCards(financial) {
-        // Inventory Value - auto format with info icon
-        const inventoryCompact = formatRupiahCompact(financial.inventory_value || 0);
-        const inventoryFull = formatRupiahFull(financial.inventory_value || 0);
-        $('#card-inventory-value').html(
-            inventoryCompact +
-            ' <i class="ri-information-line" style="font-size: 16px; color: #f59e0b; cursor: help;" ' +
-            'title="' + inventoryFull + '" data-toggle="tooltip"></i>'
-        );
+        // Helper to generate HTML for a card with a compact value and a full-value tooltip
+        const createFinancialCardHTML = (value, iconColor) => {
+            const compactValue = formatRupiahCompact(value);
+            const fullValue = formatRupiahFull(value);
+            // Return only the value if it's zero to avoid a pointless icon
+            if (parseFloat(value) === 0) {
+                return formatRupiah(value);
+            }
+            return `${compactValue} <i class="ri-information-line" style="font-size: 16px; color: ${iconColor}; cursor: help;" title="${fullValue}" data-toggle="tooltip"></i>`;
+        };
 
-        // Gross Profit - auto format with info icon
-        const profitCompact = formatRupiahCompact(financial.total_profit || 0);
-        const profitFull = formatRupiahFull(financial.total_profit || 0);
-        $('#card-gross-profit').html(
-            profitCompact +
-            ' <i class="ri-information-line" style="font-size: 16px; color: #10b981; cursor: help;" ' +
-            'title="' + profitFull + '" data-toggle="tooltip"></i>'
-        );
+        // 1. Revenue (Ex. PPN)
+        $('#card-revenue-value').html(createFinancialCardHTML(financial.revenue_ex_ppn, '#10b981'));
 
-        // Gross Margin % - percentage format
-        const marginPercent = parseFloat(financial.gross_margin_percent || 0);
+        // 2. Inventory Value (Historical)
+        $('#card-inventory-value').html(createFinancialCardHTML(financial.inventory_value_historical, '#f59e0b'));
+
+        // 3. Potential Revenue
+        $('#card-pot-revenue-value').html(createFinancialCardHTML(financial.potential_revenue, '#6366f1'));
+
+        // 4. Potential Profit
+        $('#card-pot-profit-value').html(createFinancialCardHTML(financial.potential_profit, '#ef4444'));
+
+        // 5. Gross Profit
+        $('#card-gross-profit').html(createFinancialCardHTML(financial.gross_profit, '#10b981'));
+
+        // 6. Gross Margin % - Not a monetary value, so no icon
+        const marginPercent = parseFloat(financial.margin_percent || 0);
         $('#card-gross-margin').text(marginPercent.toFixed(2) + '%');
 
-        // Total PPN - auto format with info icon
-        const ppnCompact = formatRupiahCompact(financial.ppn_amount || 0);
-        const ppnFull = formatRupiahFull(financial.ppn_amount || 0);
-        $('#card-total-ppn').html(
-            ppnCompact +
-            ' <i class="ri-information-line" style="font-size: 16px; color: #ef4444; cursor: help;" ' +
-            'title="' + ppnFull + '" data-toggle="tooltip"></i>'
-        );
+        // 7. Total PPN (11%)
+        $('#card-total-ppn').html(createFinancialCardHTML(financial.ppn, '#ef4444'));
 
-        // Total PPh 23 - auto format with info icon
-        const pph23Compact = formatRupiahCompact(financial.pph23_amount || 0);
-        const pph23Full = formatRupiahFull(financial.pph23_amount || 0);
-        $('#card-total-pph23').html(
-            pph23Compact +
-            ' <i class="ri-information-line" style="font-size: 16px; color: #8b5cf6; cursor: help;" ' +
-            'title="' + pph23Full + '" data-toggle="tooltip"></i>'
-        );
+        // 8. Total PPh 23 (2%)
+        $('#card-total-pph23').html(createFinancialCardHTML(financial.pph_23, '#8b5cf6'));
 
         // Unpriced Items Alert
         const unpricedCount = parseInt(financial.unpriced_items_count || 0, 10);
@@ -251,7 +247,7 @@
             $('#unpriced-alert').hide();
         }
 
-        // Initialize tooltips
+        // Initialize all new tooltips
         $('[data-toggle="tooltip"]').tooltip();
     }
 
@@ -304,24 +300,33 @@
             return;
         }
 
+        // Calculate total for percentage calculation
+        const total = data.reduce((acc, item) => acc + parseFloat(item.value || 0), 0);
+
         // Special colors for Barang vs Jasa
         let chartColors = ['#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#84cc16', '#f43f5e', '#94a3b8', '#64748b'];
-
         if (type === 'type') {
-            // Barang (Blue) vs Jasa (Purple)
             chartColors = ['#3b82f6', '#8b5cf6'];
         }
 
+        // Add percentage to label string, as hoverCallback is not supported on Donut charts
+        const chartData = data.map(d => {
+            const value = parseFloat(d.value || 0);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return {
+                label: `${d.label} (${percentage}%)`,
+                value: value
+            };
+        });
+
         revenueDonutInstance = new Morris.Donut({
             element: 'revenue-donut-chart-div',
-            data: data.map(d => ({
-                label: d.label,
-                value: parseFloat(d.value || 0)
-            })),
+            data: chartData,
             colors: chartColors,
             resize: true,
+            // Revert formatter to simple compact rupiah format as requested
             formatter: function(y) {
-                return formatRupiah(y);
+                return formatRupiahCompact(y);
             }
         });
     }
@@ -389,32 +394,42 @@
         });
     }
 
-    function updateTopMarginChart(data) {
+    function updateTopRevenueChart(data) {
+        if (window.morrisTopRevenue) {
+            $('#top-revenue-chart-div').empty();
+            window.morrisTopRevenue = null;
+        }
+
+        if (!data || !data.length) {
+            $('#top-revenue-chart-div').html('<div class="text-center text-muted py-5">No product revenue data available</div>');
+            return;
+        }
+
         const chartData = data.map(d => ({
             product: d.product_name,
-            margin: parseFloat(d.margin_percentage || 0)
+            revenue: parseFloat(d.total_revenue || 0)
         }));
 
-        if (!window.morrisTopMargin) {
-            window.morrisTopMargin = new Morris.Bar({
-                element: 'top-margin-chart-div',
-                data: chartData,
-                xkey: 'product',
-                ykeys: ['margin'],
-                labels: ['Margin %'],
-                barColors: ['#8b5cf6'],
-                barRadius: [10, 10, 0, 0],
-                hideHover: 'auto',
-                resize: true,
-                gridTextSize: 11,
-                barSizeRatio: 0.6,
-                yLabelFormat: function(y) {
-                    return y.toFixed(1) + '%';
-                }
-            });
-        } else {
-            window.morrisTopMargin.setData(chartData);
-        }
+        window.morrisTopRevenue = new Morris.Bar({
+            element: 'top-revenue-chart-div',
+            data: chartData,
+            xkey: 'product',
+            ykeys: ['revenue'],
+            labels: ['Total Revenue'],
+            barColors: ['#8b5cf6'],
+            barRadius: [10, 10, 0, 0],
+            hideHover: 'auto',
+            resize: true,
+            gridTextSize: 11,
+            barSizeRatio: 0.6,
+            yLabelFormat: function(y) {
+                return formatRupiahCompact(y);
+            },
+            hoverCallback: function(index, options, content, row) {
+                return `<div class="morris-hover-row-label">${row.product}</div>
+                        <div class="morris-hover-point">Revenue: ${formatRupiah(row.revenue)}</div>`;
+            }
+        });
     }
 
     function updateCostProfitStackChart(data) {
@@ -456,6 +471,49 @@
                     '<div class="morris-hover-point" style="color: #ef4444;">Modal (HPP): ' + formatRupiah(row.cost) + '</div>' +
                     '<div class="morris-hover-point" style="color: #10b981;">Profit (Margin): ' + formatRupiah(row.profit) + '</div>' +
                     '<div class="morris-hover-point" style="border-top: 1px solid #ccc; margin-top: 5px; padding-top: 5px;"><strong>Total Revenue: ' + formatRupiah(row.revenue) + '</strong></div>';
+            }
+        });
+    }
+
+    function updateTopClientsChart(data) {
+        if (window.morrisTopClients) {
+            $('#top-clients-chart-div').empty();
+            window.morrisTopClients = null;
+        }
+
+        if (!data || !data.length) {
+            $('#top-clients-chart-div').html('<div class="text-center text-muted py-5">No client revenue data available</div>');
+            return;
+        }
+
+        // Parse numbers and fix key to 'nama_klien'
+        const chartData = data.map(d => ({
+            nama_klien: d.nama_klien,
+            revenue_barang: parseFloat(d.revenue_barang || 0),
+            revenue_jasa: parseFloat(d.revenue_jasa || 0)
+        }));
+
+        window.morrisTopClients = new Morris.Bar({
+            element: 'top-clients-chart-div',
+            data: chartData,
+            xkey: 'nama_klien',
+            ykeys: ['revenue_barang', 'revenue_jasa'],
+            labels: ['Parts', 'Services'],
+            stacked: true,
+            barColors: ['#10b981', '#3b82f6'], // Green for Parts, Blue for Services
+            hideHover: 'auto',
+            resize: true,
+            gridTextSize: 10,
+            xLabelAngle: 35,
+            yLabelFormat: function(y) {
+                return formatRupiahCompact(y);
+            },
+            hoverCallback: function(index, options, content, row) {
+                const total = row.revenue_barang + row.revenue_jasa;
+                return `<div class="morris-hover-row-label"><strong>${row.nama_klien}</strong></div>
+                        <div class="morris-hover-point" style="color: #10b981;">Parts: ${formatRupiah(row.revenue_barang)}</div>
+                        <div class="morris-hover-point" style="color: #3b82f6;">Services: ${formatRupiah(row.revenue_jasa)}</div>
+                        <div class="morris-hover-point" style="border-top: 1px solid #ccc; margin-top: 5px; padding-top: 5px;"><strong>Total: ${formatRupiah(total)}</strong></div>`;
             }
         });
     }
@@ -623,9 +681,10 @@
     }
 
     function updateDashboardData() {
-        const loadingSpinner = '<span class="pulsing-loader">Loading...</span>';
-        $('#card-total-masuk, #card-total-keluar, #card-total-stok, #card-avg-velocity').html(loadingSpinner);
-
+            const loadingSpinner = '<span class="pulsing-loader">Loading...</span>';
+            $('#card-total-masuk, #card-total-keluar, #card-total-stok, #card-avg-velocity').html(loadingSpinner);
+            $('#card-revenue-value, #card-inventory-value, #card-pot-revenue-value, #card-pot-profit-value, #card-gross-profit, #card-gross-margin, #card-total-ppn, #card-total-pph23').html(loadingSpinner);
+        
         $('#overview-loading, #top-products-loading').show();
         const payload = {
             startDate: $('#filter_start_date').val(),
@@ -676,11 +735,14 @@
                     if (res.sales_velocity) {
                         updateSalesVelocityChart(res.sales_velocity);
                     }
-                    if (res.top_margin_products) {
-                        updateTopMarginChart(res.top_margin_products);
+                    if (res.top_revenue_products) {
+                        updateTopRevenueChart(res.top_revenue_products);
                     }
                     if (res.cost_profit_stack) {
                         updateCostProfitStackChart(res.cost_profit_stack);
+                    }
+                    if (res.top_clients_revenue) {
+                        updateTopClientsChart(res.top_clients_revenue);
                     }
 
                     // Interactive Revenue Donut
