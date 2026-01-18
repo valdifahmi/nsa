@@ -82,6 +82,10 @@ $routes->group('purchase', ['filter' => 'auth'], function ($routes) {
     $routes->post('store', 'PurchaseController::store');
     $routes->get('findProductByCode', 'PurchaseController::findProductByCode');
     $routes->get('searchProducts', 'PurchaseController::searchProducts');
+    $routes->get('list', 'PurchaseController::list');
+    $routes->post('fetchList', 'PurchaseController::fetchList');
+    $routes->post('updatePaymentStatus', 'PurchaseController::updatePaymentStatus');
+    $routes->post('delete/(:num)', 'PurchaseController::delete/$1', ['filter' => 'admin']);
 });
 
 $routes->group('sale', ['filter' => 'auth'], function ($routes) {
@@ -123,16 +127,10 @@ $routes->group('pricing', ['filter' => 'admin'], function ($routes) {
 });
 
 $routes->group('report', ['filter' => 'auth'], function ($routes) {
-    $routes->get('purchaseReport', 'ReportController::purchaseReport');
-    $routes->get('fetchPurchaseReport', 'ReportController::fetchPurchaseReport');
-    $routes->get('purchaseItemReport', 'ReportController::purchaseItemReport');
-    $routes->get('fetchPurchaseItemReport', 'ReportController::fetchPurchaseItemReport');
-    $routes->get('saleReport', 'ReportController::saleReport');
-    $routes->get('fetchSaleReport', 'ReportController::fetchSaleReport');
-    $routes->get('saleItemReport', 'ReportController::saleItemReport');
-    $routes->get('fetchSaleItemReport', 'ReportController::fetchSaleItemReport');
     $routes->get('stockReport', 'ReportController::stockReport');
     $routes->get('fetchStockReport', 'ReportController::fetchStockReport');
+    $routes->get('productLog', 'ReportController::productLog');
+    $routes->post('getLogBarang', 'ReportController::getLogBarang');
 });
 
 // Log Routes (Admin Only - With Auth and Admin Filter)

@@ -147,14 +147,30 @@
                                 </li>
                             </ul>
                         </li>
-                        <li class=" ">
-                            <a href="<?= base_url('purchase') ?>" class="">
+                        <li class="">
+                            <a href="#stockin" class="collapsed" data-toggle="collapse" aria-expanded="false">
                                 <svg class="svg-icon" id="p-dash5" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
                                     <line x1="1" y1="10" x2="23" y2="10"></line>
                                 </svg>
                                 <span class="ml-4">Stock In</span>
+                                <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="10 15 15 20 20 15"></polyline>
+                                    <path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                                </svg>
                             </a>
+                            <ul id="stockin" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
+                                <li class="">
+                                    <a href="<?= base_url('purchase') ?>">
+                                        <i class="las la-minus"></i><span>Transaksi Baru</span>
+                                    </a>
+                                </li>
+                                <li class="">
+                                    <a href="<?= base_url('purchase/list') ?>">
+                                        <i class="las la-minus"></i><span>Daftar Transaksi</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         <li class=" ">
                             <a href="<?= base_url('invoice') ?>" class="">
@@ -217,29 +233,15 @@
                                 </svg>
                             </a>
                             <ul id="reports" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle">
-                                <li class="">
-                                    <a href="<?= base_url('report/purchaseReport') ?>">
-                                        <i class="las la-minus"></i><span>Barang Masuk</span>
-                                    </a>
-                                </li>
-                                <li class="">
-                                    <a href="<?= base_url('report/purchaseItemReport') ?>">
-                                        <i class="las la-minus"></i><span>Barang Masuk (Detail)</span>
-                                    </a>
-                                </li>
-                                <li class="">
-                                    <a href="<?= base_url('report/saleReport') ?>">
-                                        <i class="las la-minus"></i><span>Barang Keluar</span>
-                                    </a>
-                                </li>
-                                <li class="">
-                                    <a href="<?= base_url('report/saleItemReport') ?>">
-                                        <i class="las la-minus"></i><span>Barang Keluar (Detail)</span>
-                                    </a>
-                                </li>
+
                                 <li class="">
                                     <a href="<?= base_url('report/stockReport') ?>">
                                         <i class="las la-minus"></i><span>Laporan Stok Barang</span>
+                                    </a>
+                                </li>
+                                <li class="">
+                                    <a href="<?= base_url('report/productLog') ?>">
+                                        <i class="las la-minus"></i><span>Laporan Log Barang</span>
                                     </a>
                                 </li>
                             </ul>

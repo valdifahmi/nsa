@@ -41,154 +41,170 @@ class PurchaseController extends BaseController
      * Store new purchase transaction (AJAX)
      * NEW LOGIC: Hidden pricing + auto-capture from product
      */
-    public function store()
-    {
-        // Get JSON input
-        $input = $this->request->getJSON();
-
-        // Validation rules
-        $validation = \Config\Services::validation();
-        $validation->setRules([
-            'supplier_id' => 'required|integer',
-            'tanggal_masuk' => 'required',
-            'items' => 'required'
-        ]);
-
-        if (!$validation->run((array)$input)) {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => $validation->getErrors()
+        public function store()
+        {
+            // Get JSON input
+            $input = $this->request->getJSON();
+    
+            // Validation rules
+            $validation = \Config\Services::validation();
+            $validation->setRules([
+                'supplier_id' => 'required|integer',
+                'tanggal_masuk' => 'required|valid_date',
+                'tanggal_jatuh_tempo' => 'permit_empty|valid_date',
+                'items' => 'required'
             ]);
-        }
-
-        // Check if items array is empty
-        if (empty($input->items)) {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Cart is empty. Please add at least one item.'
-            ]);
-        }
-
-        // Check if user is logged in
-        $user = session()->get('user');
-        if (!$user || !isset($user['id'])) {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'User not logged in. Please login first.'
-            ]);
-        }
-        $userId = $user['id'];
-
-        // Verify supplier exists
-        $supplier = $this->supplierModel->find($input->supplier_id);
-        if (!$supplier) {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Supplier not found'
-            ]);
-        }
-
-        // Start database transaction
-        $this->db->transStart();
-
-        try {
-            // Generate transaction number
-            $nomor_transaksi = $this->generateTransactionNumber();
-
-            // 1. Insert header to tb_stock_in
-            $headerData = [
-                'nomor_transaksi' => $nomor_transaksi,
-                'supplier_id' => $input->supplier_id,
-                'user_id' => $userId,
-                'tanggal_masuk' => $input->tanggal_masuk,
-                'catatan' => $input->catatan ?? null
-            ];
-
-            $this->stockInModel->insert($headerData);
-            $stock_in_id = $this->stockInModel->getInsertID();
-
-            if (!$stock_in_id) {
-                throw new \Exception('Failed to create stock in header');
+    
+            if (!$validation->run((array)$input)) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Validation failed',
+                    'errors' => $validation->getErrors()
+                ]);
             }
-
-            // 2. Process each item
+    
+            // Check if items array is empty
+            if (empty($input->items)) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Cart is empty. Please add at least one item.'
+                ]);
+            }
+    
+            // Check if user is logged in
+            $user = session()->get('user');
+            if (!$user || !isset($user['id'])) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'User not logged in. Please login first.'
+                ]);
+            }
+            $userId = $user['id'];
+    
+            // Verify supplier exists
+            $supplier = $this->supplierModel->find($input->supplier_id);
+            if (!$supplier) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Supplier not found'
+                ]);
+            }
+    
+            // --- PRE-TRANSACTION: Calculate Grand Total ---
+            $grand_total = 0;
             foreach ($input->items as $item) {
-                // Validate item data
-                if (!isset($item->product_id) || !isset($item->jumlah)) {
-                    throw new \Exception('Invalid item data');
-                }
-
-                // Get product data (including current price)
                 $product = $this->productModel->find($item->product_id);
                 if (!$product) {
-                    throw new \Exception('Product not found: ' . $item->product_id);
+                    return $this->response->setJSON(['status' => 'error', 'message' => "Product with ID {$item->product_id} not found."]);
                 }
-
-                // 3. Insert to tb_stock_in_items with HISTORICAL PRICE
-                $itemData = [
-                    'stock_in_id' => $stock_in_id,
-                    'product_id' => $item->product_id,
-                    'jumlah' => $item->jumlah,
-                    'harga_beli_satuan' => $product['harga_beli_saat_ini'] ?? 0 // AUTO from product
+                $grand_total += ($item->jumlah * ($product['harga_beli'] ?? 0));
+            }
+            // --- END OF CALCULATION ---
+    
+    
+            // Start database transaction
+            $this->db->transStart();
+    
+            try {
+                // Generate transaction number
+                $nomor_transaksi = $this->generateTransactionNumber();
+    
+                // 1. Insert header to tb_stock_in
+                $headerData = [
+                    'nomor_transaksi' => $nomor_transaksi,
+                    'supplier_id' => $input->supplier_id,
+                    'user_id' => $userId,
+                    'tanggal_masuk' => $input->tanggal_masuk,
+                    'tanggal_jatuh_tempo' => $input->tanggal_jatuh_tempo ?? null,
+                    'grand_total' => $grand_total,
+                    'status_pembayaran' => 'Belum Lunas', // Default status
+                    'catatan' => $input->catatan ?? null
                 ];
-
-                $this->stockInItemModel->insert($itemData);
-
-                // 4. Update stock in tb_products
-                $newStock = $product['stok_saat_ini'] + $item->jumlah;
-                $this->productModel->update($item->product_id, [
-                    'stok_saat_ini' => $newStock
-                ]);
-
-                // 5. Log activity
+    
+                $this->stockInModel->insert($headerData);
+                $stock_in_id = $this->stockInModel->getInsertID();
+    
+                if (!$stock_in_id) {
+                    throw new \Exception('Failed to create stock in header');
+                }
+    
+                // 2. Process each item
+                foreach ($input->items as $item) {
+                    // Validate item data
+                    if (!isset($item->product_id) || !isset($item->jumlah)) {
+                        throw new \Exception('Invalid item data');
+                    }
+    
+                    // Get product data (already fetched for total, can re-fetch for safety)
+                    $product = $this->productModel->find($item->product_id);
+                    if (!$product) {
+                        throw new \Exception('Product not found: ' . $item->product_id);
+                    }
+    
+                    // 3. Insert to tb_stock_in_items with HISTORICAL PRICE
+                    $itemData = [
+                        'stock_in_id' => $stock_in_id,
+                        'product_id' => $item->product_id,
+                        'jumlah' => $item->jumlah,
+                        'harga_beli_satuan' => $product['harga_beli'] ?? 0 // AUTO from product
+                    ];
+    
+                    $this->stockInItemModel->insert($itemData);
+    
+                    // 4. Update stock in tb_products
+                    $newStock = $product['stok_saat_ini'] + $item->jumlah;
+                    $this->productModel->update($item->product_id, [
+                        'stok_saat_ini' => $newStock
+                    ]);
+    
+                    // 5. Log activity
+                    $this->logModel->insert([
+                        'user_id' => $userId,
+                        'action' => 'CREATE',
+                        'module' => 'Stock In',
+                        'log_message' => "Barang masuk: {$product['nama_barang']} ({$item->jumlah} {$product['satuan']}) - {$nomor_transaksi}"
+                    ]);
+                }
+    
+                // Commit transaction
+                $this->db->transComplete();
+    
+                if ($this->db->transStatus() === false) {
+                    throw new \Exception('Transaction failed');
+                }
+    
+                // Log main transaction
                 $this->logModel->insert([
                     'user_id' => $userId,
                     'action' => 'CREATE',
                     'module' => 'Stock In',
-                    'log_message' => "Barang masuk: {$product['nama_barang']} ({$item->jumlah} {$product['satuan']}) - {$nomor_transaksi}"
+                    'log_message' => "Transaksi barang masuk berhasil: {$nomor_transaksi} - Supplier: {$supplier['nama_supplier']}"
+                ]);
+    
+                return $this->response->setJSON([
+                    'status' => 'success',
+                    'message' => 'Transaksi barang masuk berhasil disimpan',
+                    'nomor_transaksi' => $nomor_transaksi
+                ]);
+            } catch (\Exception $e) {
+                // Rollback transaction
+                $this->db->transRollback();
+    
+                // Log error
+                log_message('error', 'Purchase store error: ' . $e->getMessage());
+                $this->logModel->insert([
+                    'user_id' => $userId,
+                    'action' => 'ERROR',
+                    'module' => 'Stock In',
+                    'log_message' => 'Gagal menyimpan transaksi: ' . $e->getMessage()
+                ]);
+    
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Error: ' . $e->getMessage()
                 ]);
             }
-
-            // Commit transaction
-            $this->db->transComplete();
-
-            if ($this->db->transStatus() === false) {
-                throw new \Exception('Transaction failed');
-            }
-
-            // Log main transaction
-            $this->logModel->insert([
-                'user_id' => $userId,
-                'action' => 'CREATE',
-                'module' => 'Stock In',
-                'log_message' => "Transaksi barang masuk berhasil: {$nomor_transaksi} - Supplier: {$supplier['nama_supplier']}"
-            ]);
-
-            return $this->response->setJSON([
-                'status' => 'success',
-                'message' => 'Transaksi barang masuk berhasil disimpan',
-                'nomor_transaksi' => $nomor_transaksi
-            ]);
-        } catch (\Exception $e) {
-            // Rollback transaction
-            $this->db->transRollback();
-
-            // Log error
-            log_message('error', 'Purchase store error: ' . $e->getMessage());
-            $this->logModel->insert([
-                'user_id' => $userId,
-                'action' => 'ERROR',
-                'module' => 'Stock In',
-                'log_message' => 'Gagal menyimpan transaksi: ' . $e->getMessage()
-            ]);
-
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Error: ' . $e->getMessage()
-            ]);
         }
-    }
 
     /**
      * Find product by barcode/code (AJAX)
@@ -275,5 +291,185 @@ class PurchaseController extends BaseController
 
         // Format with leading zeros
         return $prefix . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Display the purchase list page
+     */
+    public function list()
+    {
+        $data['suppliers'] = $this->supplierModel->orderBy('nama_supplier', 'ASC')->findAll();
+        return view('Purchase/list', $data);
+    }
+
+    /**
+     * Fetch data for the purchase list DataTable (AJAX)
+     */
+    public function fetchList()
+    {
+        $request = service('request');
+        $draw = $request->getPost('draw');
+        $start = $request->getPost('start');
+        $length = $request->getPost('length');
+        $searchValue = $request->getPost('search')['value'];
+        $order = $request->getPost('order')[0] ?? [];
+
+        // Custom filters
+        $startDate = $request->getPost('startDate');
+        $endDate = $request->getPost('endDate');
+        $supplierId = $request->getPost('supplierId');
+        $paymentStatus = $request->getPost('paymentStatus');
+
+        $builder = $this->db->table('tb_stock_in si');
+        $builder->select('si.id, si.nomor_transaksi, si.tanggal_masuk, s.nama_supplier, si.grand_total, si.tanggal_jatuh_tempo, si.status_pembayaran');
+        $builder->join('tb_suppliers s', 'si.supplier_id = s.id', 'left');
+
+        // --- Filtering ---
+        if ($searchValue) {
+            $builder->groupStart()
+                ->like('si.nomor_transaksi', $searchValue)
+                ->orLike('s.nama_supplier', $searchValue)
+                ->groupEnd();
+        }
+        if ($startDate && $endDate) {
+            $builder->where('si.tanggal_masuk >=', $startDate);
+            $builder->where('si.tanggal_masuk <=', $endDate);
+        }
+        if ($supplierId) {
+            $builder->where('si.supplier_id', $supplierId);
+        }
+        if ($paymentStatus) {
+            $builder->where('si.status_pembayaran', $paymentStatus);
+        }
+
+        $totalRecords = $builder->countAllResults(false); // Get total records before limit
+
+        // --- Ordering ---
+        $columnMap = ['id', 'nomor_transaksi', 'tanggal_masuk', 'nama_supplier', 'grand_total', 'tanggal_jatuh_tempo', 'status_pembayaran'];
+        if (isset($order['column']) && isset($columnMap[$order['column']])) {
+            $builder->orderBy($columnMap[$order['column']], $order['dir']);
+        } else {
+            $builder->orderBy('si.tanggal_masuk', 'DESC'); // Default order
+        }
+
+        // --- Pagination ---
+        if ($length != -1) {
+            $builder->limit($length, $start);
+        }
+
+        $query = $builder->get();
+        $data = $query->getResultArray();
+
+        $output = [
+            'draw' => $draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $totalRecords, // This should be recalculated if filtering changes the count
+            'data' => $data,
+        ];
+
+        return $this->response->setJSON($output);
+    }
+
+    /**
+     * Update payment status for a purchase transaction (AJAX)
+     */
+    public function updatePaymentStatus()
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setStatusCode(403, 'Forbidden');
+        }
+
+        $id = $this->request->getPost('id');
+        $status = $this->request->getPost('status');
+
+        if (!$id || !$status) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid request.'])->setStatusCode(400);
+        }
+
+        if (!in_array($status, ['Lunas', 'Belum Lunas'])) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid status value.'])->setStatusCode(400);
+        }
+
+        $stockIn = $this->stockInModel->find($id);
+        if (!$stockIn) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Transaction not found.'])->setStatusCode(404);
+        }
+
+        try {
+            $this->stockInModel->update($id, ['status_pembayaran' => $status]);
+
+            // Log the action
+            $user = session()->get('user');
+            $this->logModel->insert([
+                'user_id' => $user['id'] ?? null,
+                'action' => 'UPDATE',
+                'module' => 'Stock In',
+                'log_message' => "Status pembayaran untuk transaksi {$stockIn['nomor_transaksi']} diubah menjadi {$status}."
+            ]);
+
+            return $this->response->setJSON(['status' => 'success', 'message' => 'Status pembayaran berhasil diperbarui.']);
+        } catch (\Exception $e) {
+            log_message('error', 'Update payment status error: ' . $e->getMessage());
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Gagal memperbarui status.'])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * Delete a purchase transaction and reverse stock (AJAX, Admin only)
+     */
+    public function delete($id = null)
+    {
+        // 1. RBAC Check
+        $user = session()->get('user');
+        if (!$user || $user['role'] !== 'admin') {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'You do not have permission for this action.'])->setStatusCode(403);
+        }
+
+        if (!$id) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid ID.'])->setStatusCode(400);
+        }
+
+        $stockIn = $this->stockInModel->find($id);
+        if (!$stockIn) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Transaction not found.'])->setStatusCode(404);
+        }
+
+        $items = $this->stockInItemModel->where('stock_in_id', $id)->findAll();
+
+        // 2. Start Transaction
+        $this->db->transStart();
+        try {
+            // 3. Stock Reversal
+            foreach ($items as $item) {
+                $this->productModel->set('stok_saat_ini', "stok_saat_ini - {$item['jumlah']}", false)
+                    ->where('id', $item['product_id'])
+                    ->update();
+            }
+
+            // 4. Delete records
+            $this->stockInItemModel->where('stock_in_id', $id)->delete();
+            $this->stockInModel->delete($id);
+
+            // 5. Commit Transaction
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === false) {
+                throw new \Exception('Database transaction failed.');
+            }
+
+            // 6. Log action
+            $this->logModel->insert([
+                'user_id' => $user['id'],
+                'action' => 'DELETE',
+                'module' => 'Stock In',
+                'log_message' => "Transaksi {$stockIn['nomor_transaksi']} dihapus dan stok dikembalikan."
+            ]);
+
+            return $this->response->setJSON(['status' => 'success', 'message' => 'Transaksi berhasil dihapus dan stok telah dikembalikan.']);
+        } catch (\Exception $e) {
+            $this->db->transRollback();
+            log_message('error', 'Delete purchase error: ' . $e->getMessage());
+            return $this->response->setJSON(['status' => 'error', 'message' => $e->getMessage()])->setStatusCode(500);
+        }
     }
 }

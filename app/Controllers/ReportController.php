@@ -19,151 +19,7 @@ class ReportController extends BaseController
         helper(['form', 'url']);
     }
 
-    /**
-     * Purchase Report (Header) - Load View
-     */
-    public function purchaseReport()
-    {
-        return view('Report/purchase');
-    }
 
-    /**
-     * Fetch Purchase Report Data (AJAX)
-     * JOIN tb_stock_in + tb_users
-     */
-    public function fetchPurchaseReport()
-    {
-        $startDate = $this->request->getGet('startDate');
-        $endDate = $this->request->getGet('endDate');
-
-        $builder = $this->db->table('tb_stock_in si');
-        $builder->select('si.id, si.nomor_transaksi, si.tanggal_masuk, si.supplier, si.catatan, u.nama_lengkap as user_name');
-        $builder->join('tb_users u', 'si.user_id = u.id', 'left');
-
-        if ($startDate && $endDate) {
-            $builder->where('DATE(si.tanggal_masuk) >=', $startDate);
-            $builder->where('DATE(si.tanggal_masuk) <=', $endDate);
-        }
-
-        $builder->orderBy('si.tanggal_masuk', 'DESC');
-        $query = $builder->get();
-        $data = $query->getResultArray();
-
-        return $this->response->setJSON([
-            'status' => 'success',
-            'data' => $data
-        ]);
-    }
-
-    /**
-     * Purchase Item Report (Detail) - Load View
-     */
-    public function purchaseItemReport()
-    {
-        return view('Report/purchase_item');
-    }
-
-    /**
-     * Fetch Purchase Item Report Data (AJAX)
-     * JOIN tb_stock_in_items + tb_stock_in + tb_products
-     */
-    public function fetchPurchaseItemReport()
-    {
-        $startDate = $this->request->getGet('startDate');
-        $endDate = $this->request->getGet('endDate');
-
-        $builder = $this->db->table('tb_stock_in_items sii');
-        $builder->select('sii.id, si.nomor_transaksi, si.tanggal_masuk, p.kode_barang, p.nama_barang, sii.jumlah, p.satuan');
-        $builder->join('tb_stock_in si', 'sii.stock_in_id = si.id', 'left');
-        $builder->join('tb_products p', 'sii.product_id = p.id', 'left');
-
-        if ($startDate && $endDate) {
-            $builder->where('DATE(si.tanggal_masuk) >=', $startDate);
-            $builder->where('DATE(si.tanggal_masuk) <=', $endDate);
-        }
-
-        $builder->orderBy('si.tanggal_masuk', 'DESC');
-        $query = $builder->get();
-        $data = $query->getResultArray();
-
-        return $this->response->setJSON([
-            'status' => 'success',
-            'data' => $data
-        ]);
-    }
-
-    /**
-     * Sale Report (Header) - Load View
-     */
-    public function saleReport()
-    {
-        return view('Report/sale');
-    }
-
-    /**
-     * Fetch Sale Report Data (AJAX)
-     * JOIN tb_stock_out + tb_users
-     */
-    public function fetchSaleReport()
-    {
-        $startDate = $this->request->getGet('startDate');
-        $endDate = $this->request->getGet('endDate');
-
-        $builder = $this->db->table('tb_stock_out so');
-        $builder->select('so.id, so.nomor_transaksi, so.tanggal_keluar, so.penerima, so.catatan, u.nama_lengkap as user_name');
-        $builder->join('tb_users u', 'so.user_id = u.id', 'left');
-
-        if ($startDate && $endDate) {
-            $builder->where('DATE(so.tanggal_keluar) >=', $startDate);
-            $builder->where('DATE(so.tanggal_keluar) <=', $endDate);
-        }
-
-        $builder->orderBy('so.tanggal_keluar', 'DESC');
-        $query = $builder->get();
-        $data = $query->getResultArray();
-
-        return $this->response->setJSON([
-            'status' => 'success',
-            'data' => $data
-        ]);
-    }
-
-    /**
-     * Sale Item Report (Detail) - Load View
-     */
-    public function saleItemReport()
-    {
-        return view('Report/sale_item');
-    }
-
-    /**
-     * Fetch Sale Item Report Data (AJAX)
-     * JOIN tb_stock_out_items + tb_stock_out + tb_products
-     */
-    public function fetchSaleItemReport()
-    {
-        $startDate = $this->request->getGet('startDate');
-        $endDate = $this->request->getGet('endDate');
-
-        $builder = $this->db->table('tb_stock_out_items soi');
-        $builder->select('soi.id, so.nomor_transaksi, so.tanggal_keluar, p.kode_barang, p.nama_barang, soi.jumlah, p.satuan');
-        $builder->join('tb_stock_out so', 'soi.stock_out_id = so.id', 'left');
-        $builder->join('tb_products p', 'soi.product_id = p.id', 'left');
-
-        if ($startDate && $endDate) {
-            $builder->where('DATE(so.tanggal_keluar) >=', $startDate);
-            $builder->where('DATE(so.tanggal_keluar) <=', $endDate);
-        }
-
-        $builder->orderBy('so.tanggal_keluar', 'DESC');
-        $query = $builder->get();
-        $data = $query->getResultArray();
-
-        return $this->response->setJSON([
-            'status' => 'success',
-            'data' => $data
-        ]);
-    }
 
     /**
      * Stock Report - Load View
@@ -192,6 +48,73 @@ class ReportController extends BaseController
         return $this->response->setJSON([
             'status' => 'success',
             'data' => $data
+        ]);
+    }
+
+    /**
+     * Product Log Report - Load View
+     */
+    /**
+     * Product Log Report - Load View
+     */
+    public function productLog()
+    {
+        return view('Report/product_log');
+    }
+
+    /**
+     * Fetch Product Log Data (AJAX)
+     */
+    public function getLogBarang()
+    {
+        $startDate = $this->request->getVar('startDate');
+        $endDate = $this->request->getVar('endDate');
+
+        if (!$startDate || !$endDate) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Please select a date range.'])->setStatusCode(400);
+        }
+
+        // Adjust endDate to include the whole day
+        $endDateWithTime = $endDate . ' 23:59:59';
+
+        $sql = "
+            SELECT * FROM (
+                SELECT
+                    si.tanggal_masuk as tanggal,
+                    p.kode_barang,
+                    p.nama_barang,
+                    si.nomor_transaksi as referensi,
+                    sii.jumlah as qty,
+                    'Stock-IN' as action
+                FROM tb_stock_in_items sii
+                JOIN tb_stock_in si ON sii.stock_in_id = si.id
+                JOIN tb_products p ON sii.product_id = p.id
+                WHERE si.tanggal_masuk >= ? AND si.tanggal_masuk <= ?
+
+                UNION ALL
+
+                SELECT
+                    so.tanggal_keluar as tanggal,
+                    p.kode_barang,
+                    p.nama_barang,
+                    so.nomor_transaksi as referensi,
+                    soi.jumlah as qty,
+                    'Stock-OUT' as action
+                FROM tb_stock_out_items soi
+                JOIN tb_stock_out so ON soi.stock_out_id = so.id
+                JOIN tb_products p ON soi.product_id = p.id
+                WHERE so.tanggal_keluar >= ? AND so.tanggal_keluar <= ?
+            ) as log
+            ORDER BY tanggal DESC
+        ";
+
+        $bindings = [$startDate, $endDateWithTime, $startDate, $endDateWithTime];
+        $query = $this->db->query($sql, $bindings);
+        $logData = $query->getResultArray();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data' => $logData
         ]);
     }
 }
