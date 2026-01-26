@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>POS Dash | Responsive Bootstrap 4 Admin Dashboard Template</title>
+    <title>NSA | Nusantara Suplai Abadi</title>
 
     <!-- Favicon -->
     <link rel="shortcut icon" href="<?= base_url() ?>dist/assets/images/favicon.ico" />
@@ -28,12 +28,12 @@
             <div class="container">
                 <div class="row align-items-center justify-content-center height-self-center">
                     <div class="col-lg-8">
-                        <div class="card auth-card">
+                        <div class="card bg-dark auth-card">
                             <div class="card-body p-0">
                                 <div class="d-flex align-items-center auth-content">
                                     <div class="col-lg-7 align-self-center">
                                         <div class="p-3">
-                                            <h2 class="mb-2">Sign In</h2>
+                                            <h2 class="mb-2 text-white">Sign In</h2>
                                             <p>Login to stay connected.</p>
                                             <?php if (session()->has('error')): ?>
                                                 <div class="alert alert-danger"><?= session('error') ?></div>
@@ -58,7 +58,7 @@
                                         </div>
                                     </div>
                                     <div class="col-lg-5 content-right">
-                                        <img src="<?= base_url() ?>dist/assets/images/login/01.png" class="img-fluid image-right" alt="">
+                                        <img src="<?= base_url() ?>dist/assets/images/login/logo.png" class="img-fluid image-right" alt="">
                                     </div>
                                 </div>
                             </div>
