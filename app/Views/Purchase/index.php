@@ -15,7 +15,7 @@
 
                 <!-- Header Form -->
                 <div class="row mb-4">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="form-group">
                             <label for="supplier_id">Supplier <span class="text-danger">*</span></label>
                             <div class="input-group">
@@ -30,19 +30,13 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="form-group">
                             <label for="tanggal_masuk">Tanggal Masuk <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="tanggal_masuk" value="<?= date('Y-m-d') ?>" required>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="tanggal_jatuh_tempo">Tgl. Jatuh Tempo</label>
-                            <input type="date" class="form-control" id="tanggal_jatuh_tempo">
-                        </div>
-                    </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="form-group">
                             <label for="catatan">Catatan</label>
                             <input type="text" class="form-control" id="catatan" placeholder="Catatan transaksi (opsional)">
@@ -412,7 +406,6 @@
             var data = {
                 supplier_id: parseInt(supplier_id),
                 tanggal_masuk: tanggal_masuk,
-                tanggal_jatuh_tempo: $('#tanggal_jatuh_tempo').val() || null,
                 catatan: $('#catatan').val() || null,
                 items: cart
             };

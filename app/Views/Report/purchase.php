@@ -4,14 +4,20 @@
 <div class="row">
     <div class="col-sm-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <div class="header-title">
-                    <h4 class="card-title">Daftar Transaksi Masuk (Stock In)</h4>
+                    <h4 class="card-title">Laporan Transaksi Masuk (Stock In)</h4>
                 </div>
-                <div class="header-action">
-                    <a href="<?= base_url('purchase') ?>" class="btn btn-primary">
-                        <i class="ri-add-line"></i> Buat Transaksi Baru
-                    </a>
+                <div class="btn-group" role="group">
+                    <button id="btnExport" type="button" class="btn btn-success btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="ri-download-line"></i> Export
+                    </button>
+                    <div class="dropdown-menu" aria-labelledby="btnExport">
+                        <a class="dropdown-item" href="#" id="exportCopy"><i class="ri-file-copy-line"></i> Copy</a>
+                        <a class="dropdown-item" href="#" id="exportExcel"><i class="ri-file-excel-line"></i> Excel</a>
+                        <a class="dropdown-item" href="#" id="exportPDF"><i class="ri-file-pdf-line"></i> PDF</a>
+                        <a class="dropdown-item" href="#" id="exportPrint"><i class="ri-printer-line"></i> Print</a>
+                    </div>
                 </div>
             </div>
             <div class="card-body">
@@ -43,7 +49,7 @@
 
                 <!-- Data Table -->
                 <div class="table-responsive">
-                    <table id="purchaseListTable" class="table table-striped table-bordered" style="width:100%">
+                    <table id="purchaseReportTable" class="table table-striped table-bordered" style="width:100%">
                         <thead>
                             <tr>
                                 <th>No</th>
@@ -67,6 +73,26 @@
         </div>
     </div>
 </div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1" role="dialog" aria-labelledby="detailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailModalLabel">Detail Transaksi</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Detail content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>
@@ -79,5 +105,5 @@
     const CSRF_HASH = '<?= csrf_hash() ?>';
 </script>
 <!-- The JS file for this page -->
-<script src="<?= base_url('dist/assets/js/my-purchase-list.js?v=' . time()) ?>"></script>
+<script src="<?= base_url('dist/assets/js/my-purchase-report.js?v=' . time()) ?>"></script>
 <?= $this->endSection() ?>

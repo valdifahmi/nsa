@@ -244,6 +244,11 @@
                                         <i class="las la-minus"></i><span>Laporan Log Barang</span>
                                     </a>
                                 </li>
+                                <li class="">
+                                    <a href="<?= base_url('report/purchase') ?>">
+                                        <i class="las la-minus"></i><span>Laporan Pembelian</span>
+                                    </a>
+                                </li>
                             </ul>
                         </li>
                     </ul>

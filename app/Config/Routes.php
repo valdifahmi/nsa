@@ -131,6 +131,11 @@ $routes->group('report', ['filter' => 'auth'], function ($routes) {
     $routes->get('fetchStockReport', 'ReportController::fetchStockReport');
     $routes->get('productLog', 'ReportController::productLog');
     $routes->post('getLogBarang', 'ReportController::getLogBarang');
+
+    // Purchase Report Routes
+    $routes->get('purchase', 'ReportController::purchaseReport');
+    $routes->post('fetchPurchaseReport', 'ReportController::fetchPurchaseReport');
+    $routes->get('purchase/detail/(:num)', 'ReportController::getPurchaseDetail/$1');
 });
 
 // Log Routes (Admin Only - With Auth and Admin Filter)
