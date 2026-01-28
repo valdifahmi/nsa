@@ -136,6 +136,11 @@ $routes->group('report', ['filter' => 'auth'], function ($routes) {
     $routes->get('purchase', 'ReportController::purchaseReport');
     $routes->post('fetchPurchaseReport', 'ReportController::fetchPurchaseReport');
     $routes->get('purchase/detail/(:num)', 'ReportController::getPurchaseDetail/$1');
+    
+    // Tax Report Routes
+    $routes->get('pajak', 'ReportController::pajakReport');
+    $routes->post('getppndata', 'ReportController::getPPNData');
+    $routes->post('getpphdata', 'ReportController::getPPhData');
 });
 
 // Log Routes (Admin Only - With Auth and Admin Filter)

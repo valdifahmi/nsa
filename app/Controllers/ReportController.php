@@ -258,4 +258,69 @@ class ReportController extends BaseController
             'data' => $logData
         ]);
     }
+
+    /**
+     * Tax Report - Load View
+     */
+    public function pajakReport()
+    {
+        $clientModel = new \App\Models\ClientModel();
+        $data['clients'] = $clientModel->orderBy('nama_klien', 'ASC')->findAll();
+        return view('Report/pajak', $data);
+    }
+
+    /**
+     * Get PPN (Pajak Pertambahan Nilai) Data
+     */
+    public function getPPNData()
+    {
+        $startDate = $this->request->getVar('startDate');
+        $endDate = $this->request->getVar('endDate');
+        $clientId = $this->request->getVar('clientId');
+
+        $builder = $this->db->table('tb_stock_out so');
+        $builder->select('so.tanggal_keluar, so.nomor_invoice, c.nama_klien, so.total_barang as DPP, so.total_ppn');
+        $builder->join('tb_clients c', 'so.client_id = c.id', 'left');
+
+        if ($startDate && $endDate) {
+            $builder->where('so.tanggal_keluar >=', $startDate);
+            $builder->where('so.tanggal_keluar <=', $endDate);
+        }
+        if ($clientId) {
+            $builder->where('so.client_id', $clientId);
+        }
+
+        $query = $builder->get();
+        $data = $query->getResultArray();
+
+        return $this->response->setJSON(['data' => $data]);
+    }
+
+    /**
+     * Get PPh (Pajak Penghasilan) 23 Data
+     */
+    public function getPPhData()
+    {
+        $startDate = $this->request->getVar('startDate');
+        $endDate = $this->request->getVar('endDate');
+        $clientId = $this->request->getVar('clientId');
+
+        $builder = $this->db->table('tb_stock_out so');
+        $builder->select('so.tanggal_keluar, so.nomor_invoice, c.nama_klien, so.total_jasa as Bruto_Jasa, so.total_pph');
+        $builder->join('tb_clients c', 'so.client_id = c.id', 'left');
+        $builder->where('so.total_jasa >', 0);
+
+        if ($startDate && $endDate) {
+            $builder->where('so.tanggal_keluar >=', $startDate);
+            $builder->where('so.tanggal_keluar <=', $endDate);
+        }
+        if ($clientId) {
+            $builder->where('so.client_id', $clientId);
+        }
+
+        $query = $builder->get();
+        $data = $query->getResultArray();
+
+        return $this->response->setJSON(['data' => $data]);
+    }
 }

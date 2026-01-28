@@ -249,6 +249,11 @@
                                         <i class="las la-minus"></i><span>Laporan Pembelian</span>
                                     </a>
                                 </li>
+                                <li class="">
+                                    <a href="<?= base_url('report/pajak') ?>">
+                                        <i class="las la-minus"></i><span>Laporan Pajak</span>
+                                    </a>
+                                </li>
                             </ul>
                         </li>
                     </ul>
@@ -438,6 +443,7 @@
 
     <!-- Custom Page Scripts -->
     <?= $this->renderSection('scripts') ?>
+    <script src="<?= base_url()  ?>dist/assets/js/my-tax.js"></script>
 </body>
 
 </html>
